@@ -18,6 +18,7 @@ import zoo.world.chunk;
 import zoo.image.png;
 import zoo.world.saves;
 import zoo.client.blockmodel;
+import zoo.client.atlas;
 
 var failures = 0;
 
@@ -246,6 +247,33 @@ fn test_blockmodel() {
     check("texture path", blockmodel::texture_path(res, "minecraft:block/stone") == "test/data/resources/textures/block/stone.png");
 }
 
+fn test_atlas() {
+    let res = "test/data/resources";
+    var slots: atlas::Slot[>..] = [];
+    var tiles: u8[>..] = [];
+    let stone = atlas::add(res, "block/stone", slots, tiles);
+    let dirt = atlas::add(res, "block/dirt", slots, tiles);
+    check("tiles numbered in order", stone == 0 && dirt == 1);
+    check("tile bytes appended", tiles.len == 2 * 16 * 16 * 4);
+    check("a name is added once", atlas::add(res, "block/stone", slots, tiles) == 0 && slots.len == 2);
+    check("missing texture refused", atlas::add(res, "block/nothing_here", slots, tiles) == -1);
+    let missing = atlas::add_missing(slots, tiles);
+    check("stand-in tile", missing == 2 && atlas::find(slots, "zoo:missing") == 2);
+    atlas::add(res, "block/grass_block_top", slots, tiles);
+    var image: u8[>..] = [];
+    let g = atlas::flatten(tiles, image);
+    check("grid is square enough", g.tiles == 4 && g.cols == 2 && g.rows == 2);
+    check("image size", g.width == 32 && g.height == 32 && image.len == 32 * 32 * 4);
+    // Row 0 holds the top row of tile 0 and then of tile 1, so the first pixel
+    // of each is where the two textures' light top rows meet.
+    check("first tile in place", image[0] == 165 && image[1] == 165 && image[2] == 165);
+    check("second tile beside it", image[64] == 174 && image[65] == 136 && image[66] == 107);
+    let u, v = atlas::corner_of(g, 3);
+    check("tile corner", u == 0.5 && v == 0.5);
+    let du, dv = atlas::step_of(g);
+    check("tile step", du == 0.5 && dv == 0.5);
+}
+
 fn main() {
     var label: u8[>..] = [];
     specimen::format_label(label, specimen::current(), platform::name());
@@ -260,6 +288,7 @@ fn main() {
     test_png();
     test_saves();
     test_blockmodel();
+    test_atlas();
     test_download();
     if failures == 0 { print("all passed"); } else { print(failures, " failed"); }
     if failures > 0 { exit(1); }

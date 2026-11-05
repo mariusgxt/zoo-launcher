@@ -115,14 +115,14 @@ fn newest_resources(out: u8[..400]&) -> bool {
 let vertex_shader = """
     layout(location = 0) in vec3 a_pos;
     layout(location = 1) in vec2 a_uv;
-    layout(location = 2) in float a_shade;
+    layout(location = 2) in vec3 a_paint;
     layout(set = 1, binding = 0) uniform Camera { mat4 view_proj; vec4 eye; };
     layout(location = 0) out vec2 v_uv;
-    layout(location = 1) out float v_shade;
+    layout(location = 1) out vec3 v_paint;
     layout(location = 2) out float v_distance;
     void main() {
         v_uv = a_uv;
-        v_shade = a_shade;
+        v_paint = a_paint;
         v_distance = length(a_pos - eye.xyz) / eye.w;
         gl_Position = view_proj * vec4(a_pos, 1.0);
     }
@@ -130,14 +130,14 @@ let vertex_shader = """
 
 let fragment_shader = """
     layout(location = 0) in vec2 v_uv;
-    layout(location = 1) in float v_shade;
+    layout(location = 1) in vec3 v_paint;
     layout(location = 2) in float v_distance;
     layout(set = 2, binding = 0) uniform sampler2D atlas;
     layout(location = 0) out vec4 result;
     void main() {
         vec4 texel = texture(atlas, v_uv);
         if (texel.a < 0.5) discard;
-        vec3 color = texel.rgb * v_shade;
+        vec3 color = texel.rgb * v_paint;
         // The far edge of the loaded chunks fades into the sky instead of
         // ending in mid-air.
         float fog = smoothstep(0.6, 1.0, v_distance);

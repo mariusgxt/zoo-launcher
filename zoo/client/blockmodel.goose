@@ -15,9 +15,12 @@ namespace blockmodel;
 // and a stop for a pack whose model points at itself.
 let MAX_PARENTS = 8;
 
-struct Faces { top: u8[..120], side: u8[..120], bottom: u8[..120], ok: bool }
+let CUBE = 0;
+let CROSS = 1;                   // two crossed quads: flowers, grass, saplings
 
-fn blank() -> Faces { Faces { top: [], side: [], bottom: [], ok: false } }
+struct Faces { top: u8[..120], side: u8[..120], bottom: u8[..120], shape: i64, ok: bool }
+
+fn blank() -> Faces { Faces { top: [], side: [], bottom: [], shape: CUBE, ok: false } }
 
 fn put(dst: u8[..120]&, s: const u8[:]) {
     dst.resize(0);
@@ -98,6 +101,7 @@ fn faces_of(root: const u8[:], block_name: const u8[:]) -> Faces {
     var side: u8[..120] = [];
     var top: u8[..120] = [];
     var bottom: u8[..120] = [];
+    var cross: u8[..120] = [];
     for step in MAX_PARENTS {
         var text: u8[>..] = [];
         guard read_file(model_path(root, next), text) else { break; }
@@ -107,6 +111,7 @@ fn faces_of(root: const u8[:], block_name: const u8[:]) -> Faces {
         guard node else { break; }
         let textures = json::member(node, "textures");
         if textures {
+            take(cross, json::member(textures, "cross"));
             take(all, json::member(textures, "all"));
             take(all, json::member(textures, "texture"));
             take(side, json::member(textures, "side"));
@@ -122,6 +127,16 @@ fn faces_of(root: const u8[:], block_name: const u8[:]) -> Faces {
         if !has_parent { break; }
         next.resize(0);
         next.append(parent[..min(parent.len, 120)]);
+    }
+    // A plant names its one texture "cross" and the cross model above it
+    // repeats it as "#cross" everywhere, so a cross wins over anything else.
+    if cross.len > 0 && cross[0] != '#' {
+        put(f.top, cross);
+        put(f.side, cross);
+        put(f.bottom, cross);
+        f.shape = CROSS;
+        f.ok = true;
+        return f;
     }
     // cube_all writes its faces as "#all", so a reference that is still there
     // once the chain is read is looked up among the names the chain gathered.

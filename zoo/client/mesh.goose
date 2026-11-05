@@ -10,19 +10,25 @@ import zoo.world.nbt;
 import zoo.world.chunk;
 import zoo.client.atlas;
 import zoo.client.blockmodel;
+import zoo.client.kinds;
 namespace mesh;
 
 let EDGE = chunk::EDGE;
-let FLOATS = 6;                  // x, y, z, u, v, shade
+let FLOATS = 8;                  // x, y, z, u, v, r, g, b
 let VERTS_PER_FACE = 6;
 
-// A block as the mesher needs it: whether it fills its cell, and the tile each
-// of its three face directions wears.
-struct Look { top: i64, side: i64, bottom: i64, solid: bool }
+// Cell flags. A cell that is drawn but not OPAQUE leaves its neighbours'
+// faces in place; a CROSS cell is drawn as two crossed quads, not a cube.
+let OPAQUE: u8 = 1;
+let CROSS: u8 = 2;
+
+// A block as the mesher needs it: whether it is drawn at all, how, the tile
+// each of its three face directions wears and the tint of its top and sides.
+struct Look { top: i64, side: i64, bottom: i64, solid: bool, flags: u8, tint_top: u8, tint_side: u8 }
 
 struct Known { name: u8[..120], look: Look }
 
-struct Cell { solid: u8, top: u16, side: u16, bottom: u16 }
+struct Cell { solid: u8, flags: u8, tint_top: u8, tint_side: u8, top: u16, side: u16, bottom: u16 }
 
 // The column of cells a baked chunk covers. y0 counts sections, so the block
 // height of cell row 0 is y0 * 16.
@@ -38,7 +44,7 @@ fn look_of(root: const u8[:], name: const u8[:], slots: atlas::Slot[>..]&, tiles
     for k in known {
         if k.name == name { return k.look; }
     }
-    var look = Look { top: -1, side: -1, bottom: -1, solid: false };
+    var look = Look { top: -1, side: -1, bottom: -1, solid: false, flags: 0, tint_top: 0, tint_side: 0 };
     if !air(name) {
         let faces = blockmodel::faces_of(root, name);
         if faces.ok {
@@ -50,6 +56,11 @@ fn look_of(root: const u8[:], name: const u8[:], slots: atlas::Slot[>..]&, tiles
             if look.top < 0 { look.top = missing; }
             if look.bottom < 0 { look.bottom = missing; }
             look.solid = true;
+            if faces.shape == blockmodel::CROSS { look.flags = CROSS; }
+            else if !kinds::see_through(name) { look.flags = OPAQUE; }
+            let tt, ts = kinds::tints_of(name);
+            look.tint_top = tt as! u8;
+            look.tint_side = ts as! u8;
         }
     }
     var k = Known { name: [], look: look };
@@ -74,7 +85,7 @@ fn bake(d: const u8[:], nodes: const nbt::Node[:], layers: const chunk::Layer[:]
     vol.y0 = low;
     vol.layers = high - low + 1;
     let at = cells.len;
-    for i in vol.layers * chunk::VOLUME { cells.push(Cell { solid: 0, top: 0, side: 0, bottom: 0 }); }
+    for i in vol.layers * chunk::VOLUME { cells.push(empty_cell()); }
     vol.cells = at;
     for l in layers {
         let entries = chunk::palette_size(nodes, l.palette);
@@ -92,6 +103,9 @@ fn bake(d: const u8[:], nodes: const nbt::Node[:], layers: const chunk::Layer[:]
                 if look.solid {
                     cells[base + i] = Cell {
                         solid: 1,
+                        flags: look.flags,
+                        tint_top: look.tint_top,
+                        tint_side: look.tint_side,
                         top: look.top as! u16,
                         side: look.side as! u16,
                         bottom: look.bottom as! u16,
@@ -106,7 +120,7 @@ fn bake(d: const u8[:], nodes: const nbt::Node[:], layers: const chunk::Layer[:]
 // One loaded chunk: where it sits and which slice of the cell array is its.
 struct Piece { cx: i64, cz: i64, vol: Volume }
 
-fn empty_cell() -> Cell { Cell { solid: 0, top: 0, side: 0, bottom: 0 } }
+fn empty_cell() -> Cell { Cell { solid: 0, flags: 0, tint_top: 0, tint_side: 0, top: 0, side: 0, bottom: 0 } }
 
 fn piece_of(pieces: const Piece[:], cx: i64, cz: i64) -> i64 {
     for p, i in pieces {
@@ -138,17 +152,27 @@ fn shade_of(dx: i64, dy: i64, dz: i64) -> f32 {
     if dy > 0 { 1.0 } else if dy < 0 { 0.5 } else if dz != 0 { 0.8 } else { 0.68 }
 }
 
-fn vertex(out: f32[>..]&, x: f32, y: f32, z: f32, u: f32, v: f32, shade: f32) {
+// The colour a face is multiplied with: its direction's shade times its tint.
+struct Paint { r: f32, g: f32, b: f32 }
+
+fn paint_of(tint: u8, shade: f32) -> Paint {
+    let r, g, b = kinds::colour_of(tint);
+    Paint { r: r * shade, g: g * shade, b: b * shade }
+}
+
+fn vertex(out: f32[>..]&, x: f32, y: f32, z: f32, u: f32, v: f32, p: Paint) {
     out.push(x);
     out.push(y);
     out.push(z);
     out.push(u);
     out.push(v);
-    out.push(shade);
+    out.push(p.r);
+    out.push(p.g);
+    out.push(p.b);
 }
 
 // One face as two triangles, wound counter-clockwise seen from outside.
-fn face(out: f32[>..]&, g: const atlas::Grid&, tile: i64, shade: f32,
+fn face(out: f32[>..]&, g: const atlas::Grid&, tile: i64, shade: Paint,
         ox: f32, oy: f32, oz: f32,
         ax: f32, ay: f32, az: f32,
         bx: f32, by: f32, bz: f32) {
@@ -169,10 +193,32 @@ fn face(out: f32[>..]&, g: const atlas::Grid&, tile: i64, shade: f32,
     vertex(out, ox + bx, oy + by, oz + bz, us, vs, shade);
 }
 
+// Whether the face between here and a neighbour is drawn. It is, against air
+// and against anything see-through, except between two cells of the same
+// see-through block: water against water or glass against glass would only
+// draw the inside of one surface.
+fn open_to(here: Cell, n: Cell) -> bool {
+    if n.solid == 0 || (n.flags & CROSS) != 0 { return true; }
+    if (n.flags & OPAQUE) != 0 { return false; }
+    !((here.flags & OPAQUE) == 0 && n.side == here.side)
+}
+
+// Two quads through the cell's diagonals, each written twice with opposite
+// winding: back faces are culled, and a plant must show from both sides.
+fn cross(out: f32[>..]&, g: const atlas::Grid&, here: const Cell&, fx: f32, fy: f32, fz: f32) -> i64 {
+    let p = paint_of(here.tint_side, 0.9);
+    let tile: i64 = here.side;
+    face(out, g, tile, p, fx, fy, fz, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0);
+    face(out, g, tile, p, fx + 1.0, fy, fz + 1.0, -1.0, 0.0, -1.0, 0.0, 1.0, 0.0);
+    face(out, g, tile, p, fx + 1.0, fy, fz, -1.0, 0.0, 1.0, 0.0, 1.0, 0.0);
+    face(out, g, tile, p, fx, fy, fz + 1.0, 1.0, 0.0, -1.0, 0.0, 1.0, 0.0);
+    4
+}
+
 // Appends the visible faces of one loaded chunk, positioned in world blocks,
-// and returns how many faces were written. A face is kept when the cell next to
-// it is air; at a chunk's four walls that neighbour lives in another chunk, so
-// the test goes through the whole set of loaded pieces there.
+// and returns how many faces were written. At a chunk's four walls the
+// neighbour lives in another chunk, so the test goes through the loaded pieces
+// there; inside, it stays one array read.
 fn build(cells: const Cell[:], pieces: const Piece[:], me: i64, g: const atlas::Grid&, out: f32[>..]&) -> i64 {
     guard me >= 0 && me < pieces.len else { return 0; }
     let cx = pieces[me].cx;
@@ -190,38 +236,45 @@ fn build(cells: const Cell[:], pieces: const Piece[:], me: i64, g: const atlas::
                 let wx = wx0 + x;
                 let wy = wy0 + y;
                 let wz = wz0 + z;
-                let fx = wx as f32;
-                let fy = wy as f32;
-                let fz = wz as f32;
+                let fx: f32 = wx;
+                let fy: f32 = wy;
+                let fz: f32 = wz;
+                if (here.flags & CROSS) != 0 {
+                    faces += cross(out, g, here, fx, fy, fz);
+                    continue;
+                }
+                let top: i64 = here.top;
+                let side: i64 = here.side;
+                let bottom: i64 = here.bottom;
                 // Up and down stay inside this chunk: above and below the
                 // baked column there is nothing but air anyway.
-                if cell_at(cells, vol, x, y + 1, z).solid == 0 {
-                    face(out, g, here.top, shade_of(0, 1, 0),
+                if open_to(here, cell_at(cells, vol, x, y + 1, z)) {
+                    face(out, g, top, paint_of(here.tint_top, shade_of(0, 1, 0)),
                          fx, fy + 1.0, fz + 1.0, 1.0, 0.0, 0.0, 0.0, 0.0, -1.0);
                     faces++;
                 }
-                if cell_at(cells, vol, x, y - 1, z).solid == 0 {
-                    face(out, g, here.bottom, shade_of(0, -1, 0),
+                if open_to(here, cell_at(cells, vol, x, y - 1, z)) {
+                    face(out, g, bottom, paint_of(here.tint_side, shade_of(0, -1, 0)),
                          fx, fy, fz, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0);
                     faces++;
                 }
-                if side_open(cells, pieces, vol, x, y, z + 1, wx, wy, wz + 1) {
-                    face(out, g, here.side, shade_of(0, 0, 1),
+                if open_to(here, beside(cells, pieces, vol, x, y, z + 1, wx, wy, wz + 1)) {
+                    face(out, g, side, paint_of(here.tint_side, shade_of(0, 0, 1)),
                          fx, fy, fz + 1.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0);
                     faces++;
                 }
-                if side_open(cells, pieces, vol, x, y, z - 1, wx, wy, wz - 1) {
-                    face(out, g, here.side, shade_of(0, 0, -1),
+                if open_to(here, beside(cells, pieces, vol, x, y, z - 1, wx, wy, wz - 1)) {
+                    face(out, g, side, paint_of(here.tint_side, shade_of(0, 0, -1)),
                          fx + 1.0, fy, fz, -1.0, 0.0, 0.0, 0.0, 1.0, 0.0);
                     faces++;
                 }
-                if side_open(cells, pieces, vol, x + 1, y, z, wx + 1, wy, wz) {
-                    face(out, g, here.side, shade_of(1, 0, 0),
+                if open_to(here, beside(cells, pieces, vol, x + 1, y, z, wx + 1, wy, wz)) {
+                    face(out, g, side, paint_of(here.tint_side, shade_of(1, 0, 0)),
                          fx + 1.0, fy, fz + 1.0, 0.0, 0.0, -1.0, 0.0, 1.0, 0.0);
                     faces++;
                 }
-                if side_open(cells, pieces, vol, x - 1, y, z, wx - 1, wy, wz) {
-                    face(out, g, here.side, shade_of(-1, 0, 0),
+                if open_to(here, beside(cells, pieces, vol, x - 1, y, z, wx - 1, wy, wz)) {
+                    face(out, g, side, paint_of(here.tint_side, shade_of(-1, 0, 0)),
                          fx, fy, fz, 0.0, 0.0, 1.0, 0.0, 1.0, 0.0);
                     faces++;
                 }
@@ -231,12 +284,10 @@ fn build(cells: const Cell[:], pieces: const Piece[:], me: i64, g: const atlas::
     faces
 }
 
-// Whether a sideways neighbour is air. Inside the chunk that is one array read;
-// only the cells against a wall pay for the chunk lookup.
-fn side_open(cells: const Cell[:], pieces: const Piece[:], vol: const Volume&,
-             x: i64, y: i64, z: i64, wx: i64, wy: i64, wz: i64) -> bool {
-    if x >= 0 && x < EDGE && z >= 0 && z < EDGE {
-        return cell_at(cells, vol, x, y, z).solid == 0;
-    }
-    cell_world(cells, pieces, wx, wy, wz).solid == 0
+// A sideways neighbour, from this chunk if it lies inside it, otherwise from
+// whichever loaded chunk holds it.
+fn beside(cells: const Cell[:], pieces: const Piece[:], vol: const Volume&,
+          x: i64, y: i64, z: i64, wx: i64, wy: i64, wz: i64) -> Cell {
+    if x >= 0 && x < EDGE && z >= 0 && z < EDGE { return cell_at(cells, vol, x, y, z); }
+    cell_world(cells, pieces, wx, wy, wz)
 }

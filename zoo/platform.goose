@@ -17,7 +17,7 @@ fn current() -> i32 { zoo_platform() }
 
 // Minutes since local midnight. The C side does the conversion, because
 // os::time is epoch seconds and Goose has no notion of the machine's zone.
-fn clock_minutes() -> i64 { zoo_local_minutes() as i64 }
+fn clock_minutes() -> i64 { zoo_local_minutes() }
 
 // Asks the system to put zoo's window in front. Call it once the window has
 // drawn, not before: a window with nothing in it yet can be raised and then

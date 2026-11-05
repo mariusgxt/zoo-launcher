@@ -74,18 +74,20 @@ fn draw(p: const kit::Pen&, s: state::State&, items: content::Item[>..]&, w: f32
     let rows_per_col = ((bottom - top) / row_h) as i64;
     let box = kit::r(list_x, top, list_w, bottom - top);
     if kit::hovered(p, box) { s.scroll -= ui::input_mouse(p.ctx).scroll_delta.y * 40.0; }
-    let pages = max(0.0, (items.len - rows_per_col * 2) as f32 / 2.0 * row_h);
+    let pages = max(0.0, (items.len - rows_per_col * 2) / 2.0 * row_h);
     s.scroll = clamp(s.scroll, 0.0, pages);
 
     ui::push_scissor(p.ctx, box);
-    for item, i in items {
+    var i = 0;
+    while i < items.len {
         let col = i % 2;
         let row = i / 2;
         let y = top + row * row_h - s.scroll;
         if y + row_h > top - row_h && y < bottom {
             let rb = kit::r(list_x + col * (col_w + 16.0), y, col_w, row_h - 10.0);
-            if draw_row(p, rb, item) { content::set_enabled(item, !item.on); }
+            if draw_row(p, rb, items[i]) { content::set_enabled(items[i], !items[i].on); }
         }
+        i++;
     }
     ui::push_scissor(p.ctx, kit::r(0.0, 0.0, w, h));
 }

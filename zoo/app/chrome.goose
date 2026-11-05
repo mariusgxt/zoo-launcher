@@ -76,7 +76,7 @@ fn draw_top(p: const kit::Pen&, s: const state::State&, w: f32) {
 
     let bar_x = x + 186.0;
     let bar_w = min(430.0, w - bar_x - 330.0);
-    kit::progress(p, kit::r(bar_x, state::EDGE + 26.0, bar_w, 8.0), ready as f32, max(total, 1) as f32);
+    kit::progress(p, kit::r(bar_x, state::EDGE + 26.0, bar_w, 8.0), ready, max(total, 1));
     kit::text_right(p, bar_x + bar_w, state::EDGE + 40.0, "versions prepared", p.fonts.tiny, theme::FAINT);
 
     // The right end carries what the concept puts there: a state and who is

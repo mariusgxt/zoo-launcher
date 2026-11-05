@@ -53,7 +53,7 @@ Builds for Windows x64 and Linux x86-64 are attached to each [release](https://g
 ## The client
 
 <p align="center">
-  <img src="docs/media/client.png" alt="The zoo client drawing a world: terrain, trunks and a free camera" width="100%">
+  <img src="docs/media/client.png" alt="The zoo client drawing a world: hills, trees, a lake and grass tufts" width="100%">
 </p>
 
 <sub>Drawn from the demo world in <code>test/data/saves/demo</code> with the stand-in textures of <code>test/data/resources</code>, both written by <code>test/make_fixtures.py</code>, so the picture holds no Minecraft content. With your own prepared version it uses the real textures.</sub>
@@ -77,7 +77,8 @@ What it draws today is every full block as a cube, with the textures its model c
 |---|---|---|
 | 1 | Launcher with a GUI: versions, download, checks, resource preparation | working |
 | 2 | Zoo client, first look: open a singleplayer world (Anvil, NBT) and render its chunks with the real textures, free camera | working |
-| 2b | Water, leaves and the blocks that are not cubes, light from the sky | next |
+| 2b | Water, leaves, plants and grass colour (plains only) | working |
+| 2c | Light from the sky, stairs, slabs and other shapes that are not cubes | next |
 | 3 | Playable: player physics and collision, breaking and placing blocks, saving, HUD | planned |
 | 4 | The long road, in Horizon's order: world generation, mobs, redstone, multiplayer protocol, comparison tests against vanilla | planned |
 | - | Microsoft account sign-in, several instances, a mod and pack browser | planned |

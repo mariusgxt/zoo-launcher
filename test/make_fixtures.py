@@ -137,7 +137,7 @@ def region(chunks):
     return bytes(header) + body
 
 
-world = f"{root}/world"
+world = f"{root}/saves/testworld"
 os.makedirs(f"{world}/region", exist_ok=True)
 
 level = nbt_tag(10, "", nbt_compound({"Data": (10, nbt_compound({

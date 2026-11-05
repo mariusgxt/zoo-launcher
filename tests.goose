@@ -16,6 +16,7 @@ import zoo.world.nbt;
 import zoo.world.region;
 import zoo.world.chunk;
 import zoo.image.png;
+import zoo.world.saves;
 
 var failures = 0;
 
@@ -99,7 +100,7 @@ fn test_download() {
 
 fn test_nbt() {
     var raw: u8[>..] = [];
-    check("level.dat readable", read_file("test/data/world/level.dat", raw));
+    check("level.dat readable", read_file("test/data/saves/testworld/level.dat", raw));
     var plain: u8[>..] = [];
     check("level.dat is gzip", compress::gzip(raw, plain));
     var tags: nbt::Node[>..] = [];
@@ -118,7 +119,7 @@ fn test_nbt() {
 
 fn test_region() {
     var file: u8[>..] = [];
-    check("region readable", read_file("test/data/world/region/r.0.0.mca", file));
+    check("region readable", read_file("test/data/saves/testworld/region/r.0.0.mca", file));
     check("chunk 0,0 present", region::exists(file, 0, 0));
     check("chunk 5,5 absent", !region::exists(file, 5, 5));
     var raw: u8[>..] = [];
@@ -132,14 +133,14 @@ fn test_region() {
     let rx, rz = region::region_of(-1, -1);
     check("negative region", rx == -1 && rz == -1);
     var neg: u8[>..] = [];
-    check("negative chunk file", region::read_file_of("test/data/world/region", -1, -1, neg));
+    check("negative chunk file", region::read_file_of("test/data/saves/testworld/region", -1, -1, neg));
     var raw2: u8[>..] = [];
     check("negative chunk reads", region::chunk(neg, -1, -1, raw2) && raw2.len > 0);
 }
 
 fn test_chunk() {
     var file: u8[>..] = [];
-    read_file("test/data/world/region/r.0.0.mca", file);
+    read_file("test/data/saves/testworld/region/r.0.0.mca", file);
     var raw: u8[>..] = [];
     region::chunk(file, 0, 0, raw);
     var tags: nbt::Node[>..] = [];
@@ -206,6 +207,25 @@ fn test_png() {
     check("paeth picks the nearest", png::paeth(10, 20, 15) == 15 && png::paeth(2, 3, 100) == 2);
 }
 
+fn test_saves() {
+    var all: saves::Save[>..] = [];
+    check("saves found", saves::scan("test/data", all) == 1);
+    check("folder name", all[0].folder == "testworld");
+    check("name from level.dat", all[0].name == "zoo test");
+    check("data version read", all[0].version == 3953);
+    check("find by name", saves::find(all, "zoo test") == 0 && saves::find(all, "nope") == -1);
+    check("no saves folder", saves::scan("test/data/png", all) == 0);
+    var tiles: saves::Tile[>..] = [];
+    check("region files listed", saves::tiles(all[0], tiles) == 2);
+    var seen_neg = false;
+    for t in tiles { if t.rx == -1 && t.rz == -1 { seen_neg = true; } }
+    check("negative region tile", seen_neg);
+    let rx, rz, ok = saves::parse_tile("r.-3.12.mca");
+    check("tile name parsed", ok && rx == -3 && rz == 12);
+    let _a, _b, bad = saves::parse_tile("r.5.mca");
+    check("tile name refused", !bad);
+}
+
 fn main() {
     var label: u8[>..] = [];
     specimen::format_label(label, specimen::current(), platform::name());
@@ -218,6 +238,7 @@ fn main() {
     test_region();
     test_chunk();
     test_png();
+    test_saves();
     test_download();
     if failures == 0 { print("all passed"); } else { print(failures, " failed"); }
     if failures > 0 { exit(1); }

@@ -3,6 +3,7 @@
 // settings page is built. The swatches are the same concept's accent row.
 import std;
 import ui;
+import zoo.specimen;
 import zoo.app.palette;
 import zoo.app.theme;
 import zoo.app.kit;
@@ -32,6 +33,12 @@ fn draw(p: const kit::Pen&, s: state::State&, w: f32, h: f32) -> i64 {
 
     state::page_heading(p, x, 30.0, "Setup",
                         "How the launcher looks, and where it keeps the files it prepares.");
+
+    // The label of this build, which otherwise only the Label page carries:
+    // a build stamp against the heading, where the page has room.
+    let t = specimen::current();
+    kit::text_right(p, right, 32.0, str("BUILD ", t.version, "  ·  ", t.accession), p.fonts.tiny, theme::FAINT);
+    kit::text_right(p, right, 48.0, t.scientific, p.fonts.small, theme::MUTED);
 
     let panel = kit::r(x, 120.0, right - x, bottom - 120.0);
     ui::fill_rect(p.ctx, panel, 16.0, theme::PANEL);

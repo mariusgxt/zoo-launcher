@@ -2,7 +2,7 @@
 // with the textures prepared from your own copy of Minecraft. No gameplay yet,
 // a free camera only.
 //
-//   zoo-client                        the newest world of your .minecraft
+//   zoo-client                        the first world in your .minecraft
 //   zoo-client --world NAME           a world by its folder or its name
 //   zoo-client --saves DIR            another saves folder
 //   zoo-client --resources DIR        another prepared resources folder
@@ -26,6 +26,7 @@ import zoo.world.saves;
 import zoo.client.atlas;
 import zoo.client.mesh;
 import zoo.client.camera;
+import zoo.client.stream;
 
 let DEFAULT_RADIUS = 3;
 
@@ -111,59 +112,6 @@ fn newest_resources(out: u8[..400]&) -> bool {
     true
 }
 
-struct Loaded { chunks: i64, faces: i64, floats: i64, top: i64 }
-
-// Loads every chunk within radius of the start, meshes it and leaves the
-// vertices in one buffer: a few hundred thousand faces still upload in one go,
-// and splitting per chunk only pays once chunks come and go.
-fn load_world(save: const saves::Save&, resources: const u8[:], cx0: i64, cz0: i64, radius: i64,
-              slots: atlas::Slot[>..]&, tiles: u8[>..]&, verts: f32[>..]&) -> Loaded {
-    var out = Loaded { chunks: 0, faces: 0, floats: 0, top: -2048 };
-    var known: mesh::Known[>..] = [];
-    var pending: mesh::Cell[>..] = [];
-    var pieces: mesh::Piece[>..] = [];
-    // Meshing needs the atlas grid, which is only final once every chunk has
-    // been baked, so the cells are kept and the faces written in a second pass.
-    var file: u8[>..] = [];
-    var last_rx = 1 << 40;
-    var last_rz = 1 << 40;
-    for dz in 2 * radius + 1 {
-        for dx in 2 * radius + 1 {
-            let cx = cx0 + dx - radius;
-            let cz = cz0 + dz - radius;
-            let rx, rz = region::region_of(cx, cz);
-            if rx != last_rx || rz != last_rz {
-                file.resize(0);
-                if !read_file(region::path_of(save.region_dir, rx, rz), file) { file.resize(0); }
-                last_rx = rx;
-                last_rz = rz;
-            }
-            if file.len == 0 || !region::exists(file, cx, cz) { continue; }
-            var raw: u8[>..] = [];
-            if !region::chunk(file, cx, cz, raw) { continue; }
-            var tags: nbt::Node[>..] = [];
-            if !nbt::read(raw, tags) { continue; }
-            var layers: chunk::Layer[>..] = [];
-            var blocks: u16[>..] = [];
-            let info = chunk::read(raw, tags, layers, blocks);
-            if !info.ok { continue; }
-            let vol = mesh::bake(raw, tags, layers, blocks, resources, slots, tiles, known, pending);
-            if vol.layers == 0 { continue; }
-            pieces.push(mesh::Piece { cx: cx, cz: cz, vol: vol });
-            out.chunks++;
-            out.top = max(out.top, (vol.y0 + vol.layers) * chunk::EDGE);
-        }
-    }
-    guard out.chunks > 0 else { return out; }
-    var image: u8[>..] = [];
-    let grid = atlas::flatten(tiles, image);
-    for i in pieces.len {
-        out.faces += mesh::build(pending, pieces, i, grid, verts);
-    }
-    out.floats = verts.len;
-    out
-}
-
 let vertex_shader = """
     layout(location = 0) in vec3 a_pos;
     layout(location = 1) in vec2 a_uv;
@@ -175,7 +123,7 @@ let vertex_shader = """
     void main() {
         v_uv = a_uv;
         v_shade = a_shade;
-        v_distance = length(a_pos - eye.xyz);
+        v_distance = length(a_pos - eye.xyz) / eye.w;
         gl_Position = view_proj * vec4(a_pos, 1.0);
     }
     """;
@@ -192,7 +140,7 @@ let fragment_shader = """
         vec3 color = texel.rgb * v_shade;
         // The far edge of the loaded chunks fades into the sky instead of
         // ending in mid-air.
-        float fog = smoothstep(0.55, 1.0, v_distance / 260.0);
+        float fog = smoothstep(0.6, 1.0, v_distance);
         result = vec4(mix(color, vec3(0.62, 0.72, 0.85), fog), 1.0);
     }
     """;
@@ -246,43 +194,55 @@ fn main() {
     }
 
     var cam = camera::at(o.at_x, o.at_y, o.at_z, 135.0, -25.0);
-    let cx0 = div_euclid(cam.pos.x as i64, chunk::EDGE);
-    let cz0 = div_euclid(cam.pos.z as i64, chunk::EDGE);
+    var center = stream::Center {
+        cx: div_euclid(cam.pos.x as i64, chunk::EDGE),
+        cz: div_euclid(cam.pos.z as i64, chunk::EDGE),
+        radius: o.radius,
+    };
 
-    var slots: atlas::Slot[>..] = [];
+    var cache: stream::Cached[>..] = [];
+    var pool: u8[>..] = [];
+    var known: mesh::Known[>..] = [];
+    var slots_atlas: atlas::Slot[>..] = [];
     var tiles: u8[>..] = [];
-    var verts: f32[>..] = [];
-    let loaded = load_world(save, resources, cx0, cz0, o.radius, slots, tiles, verts);
-    print("world \"", save.name, "\": ", loaded.chunks, " chunks, ", loaded.faces, " faces, ",
-          slots.len, " textures");
-    guard loaded.chunks > 0 && loaded.faces > 0 else {
-        write_stderr("nothing to draw there: try --at or --radius\n");
-        exit(1);
-    }
     if !o.placed {
-        // Start above the highest block that was loaded, looking down at it.
-        cam.pos.y = (loaded.top + 6) as f32;
-        cam.pos.x = (cx0 * chunk::EDGE - 12) as f32;
-        cam.pos.z = (cz0 * chunk::EDGE - 12) as f32;
+        // Start a little above the ground of the chunk under the camera, which
+        // is the one place zoo can look at before anything is meshed.
+        let ground = stream::ground_of(save.region_dir, resources, center.cx, center.cz,
+                                       cache, pool, slots_atlas, tiles, known);
+        guard ground > -9999 else {
+            write_stderr("no chunk at the start: try --at X Y Z\n");
+            exit(1);
+        }
+        cam.pos.y = (ground + 12) as f32;
+        cam.pos.x = (center.cx * chunk::EDGE + 8) as f32;
+        cam.pos.z = (center.cz * chunk::EDGE + 24) as f32;
+        center.cz = div_euclid(cam.pos.z as i64, chunk::EDGE);
     }
+    print("world \"", save.name, "\", radius ", o.radius, ", starting at ",
+          cam.pos.x as i64, " ", cam.pos.y as i64, " ", cam.pos.z as i64);
 
-    var image: u8[>..] = [];
-    let grid = atlas::flatten(tiles, image);
     guard gfx::open("zoo", 1280, 800, gfx::WINDOW_RESIZABLE) else {
         fatal::stop(str("The window could not be opened.\n", gfx::error()));
     }
+    let grid = stream::grid();
+    var image: u8[>..] = [];
+    atlas::place(tiles, 0, grid, image);
+    var uploaded = tiles.len / atlas::BYTES;
     let texture = gfx::texture2d(grid.width, grid.height);
     gfx::update_texture(texture, image);
     let sampler = gfx::sampler(gfx::NEAREST, gfx::CLAMP);
     let pipe = gfx::pipeline(embed_shader("vert", vertex_shader), embed_shader("frag", fragment_shader),
                              gfx::PipelineDesc { cull: gfx::CULL_BACK, depth_test: true, depth_write: true });
-    let buffer = gfx::vertex_buffer(bytes_of(verts));
-    if pipe.id == 0 || buffer.id == 0 || texture.id == 0 {
+    if pipe.id == 0 || texture.id == 0 {
         fatal::stop(str("The renderer could not be set up.\n", gfx::error()));
     }
-    let vertices = loaded.floats / 6;
+
+    var slots: stream::Slot[>..] = [];
+    var scratch: f32[>..] = [];
     var grabbed = false;
     var drawn = 0;
+    let fog_at = ((o.radius + 1) * chunk::EDGE) as f32;
     while gfx::frame() {
         if gfx::key_pressed("Escape") {
             if grabbed { grabbed = false; gfx::set_mouse_relative(false); } else { break; }
@@ -296,19 +256,38 @@ fn main() {
             camera::turn(cam, d.x, d.y);
         }
         if gfx::focused() { camera::walk(cam, delta_time_f32()); }
+
+        center.cx = div_euclid(floor(cam.pos.x) as i64, chunk::EDGE);
+        center.cz = div_euclid(floor(cam.pos.z) as i64, chunk::EDGE);
+        stream::follow(slots, center);
+        stream::work(save.region_dir, resources, center, slots, cache, pool, slots_atlas, tiles, known, scratch);
+        let have = tiles.len / atlas::BYTES;
+        if have > uploaded {
+            atlas::place(tiles, uploaded, grid, image);
+            gfx::update_texture(texture, image);
+            uploaded = have;
+        }
+
         let screen = gfx::screen_size();
         gfx::begin_screen(float4 { x: 0.62, y: 0.72, z: 0.85, w: 1.0 });
         gfx::bind(pipe);
-        gfx::bind_vertex_buffer(buffer);
         gfx::bind_texture(gfx::FRAGMENT, 0, texture, sampler);
         gfx::uniforms(gfx::VERTEX, 0, Uniforms {
             view_proj: camera::view_proj(cam, screen.x, screen.y),
-            eye: float4 { x: cam.pos.x, y: cam.pos.y, z: cam.pos.z, w: 0.0 },
+            eye: float4 { x: cam.pos.x, y: cam.pos.y, z: cam.pos.z, w: fog_at },
         });
-        gfx::draw(vertices);
+        for s in slots {
+            if s.state == stream::READY && s.vertices > 0 {
+                gfx::bind_vertex_buffer(s.buffer);
+                gfx::draw(s.vertices);
+            }
+        }
         gfx::end_pass();
-        drawn++;
+        // A screenshot run waits for the world to finish loading, since a
+        // picture of half-meshed chunks says nothing about the renderer.
+        if stream::pending(slots) == 0 { drawn++; }
         if o.frames > 0 && drawn >= o.frames {
+            print(stream::drawn(slots), " chunks drawn, ", slots_atlas.len, " textures");
             gfx::screenshot("zoo-client.png");
             break;
         }

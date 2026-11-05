@@ -108,3 +108,30 @@ fn step_of(g: const Grid&) -> f32, f32 {
     guard g.cols > 0 && g.rows > 0 else { return 0.0, 0.0; }
     return 1.0 / g.cols as f32, 1.0 / g.rows as f32;
 }
+
+// A grid of fixed size for an atlas that keeps growing while the world is
+// open. Texture coordinates depend on the grid, so a grid that resized itself
+// would leave every chunk meshed so far pointing at the wrong tiles.
+fn fixed(cols: i64, rows: i64, tiles: i64) -> Grid {
+    Grid { cols: cols, rows: rows, width: cols * TILE, height: rows * TILE, tiles: tiles }
+}
+
+// Copies tiles from..tiles.len into their place in an image laid out by g,
+// growing the image to its full size first. Returns how many were placed.
+fn place(tiles: const u8[:], from: i64, g: const Grid&, image: u8[>..]&) -> i64 {
+    let total = g.width * g.height * 4;
+    if image.len < total { image.resize(total, 0); }
+    let count = min(tiles.len / BYTES, g.cols * g.rows);
+    var placed = 0;
+    for t in from..count {
+        let col = t % g.cols;
+        let row = t / g.cols;
+        for y in TILE {
+            let src = t * BYTES + y * TILE * 4;
+            let dst = ((row * TILE + y) * g.width + col * TILE) * 4;
+            for i in TILE * 4 { image[dst + i] = tiles[src + i]; }
+        }
+        placed++;
+    }
+    placed
+}

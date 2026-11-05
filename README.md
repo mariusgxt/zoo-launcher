@@ -69,7 +69,7 @@ zoo-client --check                # the folders zoo uses, and whether they work
 
 Click into the window to take the mouse, Escape to give it back. `W A S D` moves, Space and Shift go up and down, Ctrl is faster.
 
-What it draws today is every full block as a cube, with the textures its model chain names. It reads the chunks around one point once, so the world does not grow as you fly. Chunk borders are meshed against their neighbours, so only the edge of what is loaded still shows a wall. Water, leaves and the blocks that are not cubes are missing. Worlds from 1.16 on are read; older ones pack their block indices differently and are refused rather than drawn wrong.
+What it draws today is every full block as a cube, with the textures its model chain names. Chunks are loaded and dropped as you fly, a couple per frame and nearest first, and each one is meshed against its neighbours, so only the edge of what is loaded shows a wall. The fog sits at that edge. Water, leaves and the blocks that are not cubes are missing. Worlds from 1.16 on are read; older ones pack their block indices differently and are refused rather than drawn wrong.
 
 ## Roadmap
 
@@ -77,7 +77,7 @@ What it draws today is every full block as a cube, with the textures its model c
 |---|---|---|
 | 1 | Launcher with a GUI: versions, download, checks, resource preparation | working |
 | 2 | Zoo client, first look: open a singleplayer world (Anvil, NBT) and render its chunks with the real textures, free camera | working |
-| 2b | Chunks loaded and dropped as you move, water, leaves and the blocks that are not cubes | next |
+| 2b | Water, leaves and the blocks that are not cubes, light from the sky | next |
 | 3 | Playable: player physics and collision, breaking and placing blocks, saving, HUD | planned |
 | 4 | The long road, in Horizon's order: world generation, mobs, redstone, multiplayer protocol, comparison tests against vanilla | planned |
 | - | Microsoft account sign-in, several instances, a mod and pack browser | planned |

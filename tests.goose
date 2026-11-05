@@ -274,6 +274,12 @@ fn test_atlas() {
     check("tile corner", u == 0.5 && v == 0.5);
     let du, dv = atlas::step_of(g);
     check("tile step", du == 0.5 && dv == 0.5);
+    // A fixed grid places tile 1 in the second column whatever the count is.
+    let big = atlas::fixed(4, 4, 4);
+    var grown: u8[>..] = [];
+    check("tiles placed", atlas::place(tiles, 0, big, grown) == 4 && grown.len == 64 * 64 * 4);
+    check("tile in its column", grown[16 * 4] == 174 && grown[16 * 4 + 1] == 136);
+    check("later tiles only", atlas::place(tiles, 3, big, grown) == 1);
 }
 
 fn test_mesh() {

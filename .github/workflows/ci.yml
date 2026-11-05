@@ -28,10 +28,12 @@ jobs:
             name: linux-x64
             goose: goose/build/goose
             exe: zoo-launcher
+            client: zoo-client
           - os: windows-2022
             name: windows-x64
             goose: goose/build/Release/goose.exe
             exe: zoo-launcher.exe
+            client: zoo-client.exe
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -63,7 +65,9 @@ jobs:
 
       - name: Build zoo
         shell: bash
-        run: ./${{ matrix.goose }} build zoo.goose
+        run: |
+          ./${{ matrix.goose }} build zoo.goose
+          ./${{ matrix.goose }} build client.goose
 
       - name: Test
         shell: bash
@@ -72,11 +76,24 @@ jobs:
           sleep 2
           ./${{ matrix.goose }} tests.goose
 
+      # Draws the test world with the stand-in resources and keeps the frame,
+      # which catches a broken mesh or shader that the unit tests cannot see.
+      - name: Render the test world
+        shell: bash
+        env:
+          GOOSE_GFX_HEADLESS: "1"
+        run: ./${{ matrix.client }} --saves test/data --resources test/data/resources --at 8 26 8 --radius 1 --frames 2
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: render-${{ matrix.name }}
+          path: zoo-client.png
+
       - name: Package
         shell: bash
         run: |
           mkdir -p dist/zoo
-          cp ${{ matrix.exe }} README.md THIRD_PARTY_NOTICES.md dist/zoo/
+          cp ${{ matrix.exe }} ${{ matrix.client }} README.md THIRD_PARTY_NOTICES.md dist/zoo/
           cd dist
           if [ "$RUNNER_OS" = "Windows" ]; then 7z a ../zoo-${{ matrix.name }}.zip zoo >/dev/null; else tar czf ../zoo-${{ matrix.name }}.tar.gz zoo; fi
 
@@ -105,6 +122,8 @@ jobs:
             grep -A7 "version: \"${tag}\"" zoo/specimen.goose | sed -n 's/^ *\([a-z]*\): "\(.*\)",$/- **\1**: \2/p'
             echo
             echo "Unpack the archive for your system and start \`zoo-launcher\`."
+            echo
+            echo "\`zoo-client\` opens a world of your own and draws it; see the README."
           } > notes.md
           cat notes.md
       - uses: softprops/action-gh-release@v2

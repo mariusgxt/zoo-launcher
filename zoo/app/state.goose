@@ -5,12 +5,13 @@
 import std;
 import ui;
 import zoo.collection;
+import zoo.specimen;
 import zoo.app.theme;
 import zoo.app.kit;
 import zoo.app.catalogue;
 namespace state;
 
-// The pages, in the order the rail lists them.
+// The pages, in the order the sidebar lists them.
 let PAGE_PLAY = 0;
 let PAGE_VERSIONS = 1;
 let PAGE_CONTENT = 2;
@@ -51,17 +52,22 @@ struct State {
     locality: const u8[:],
     theme_pick: i64,
     minutes: i64,         // local wall clock, refreshed by the main loop
+    backdrop: ui::Image,  // the client's own frame, behind the Play page
 }
 
-// The window is laid out from these; everything else hangs off them.
-let EDGE: f32 = 20.0;         // window border to the rail
-let RAIL_W: f32 = 66.0;
-let TOP_H: f32 = 92.0;        // logo, clock, badge and bar live above this
-let GAP: f32 = 24.0;          // rail to content
+// The window is laid out from these; everything else hangs off them. The
+// sidebar is the Zenith client's wide rail; the pages get one 32 px gutter.
+let SIDEBAR_W: f32 = 236.0;
+let PAD: f32 = 32.0;
+let FOOT_H: f32 = 34.0;
 
-fn content_x() -> f32 { EDGE + RAIL_W + GAP }
+fn content_x() -> f32 { SIDEBAR_W + PAD }
 
-fn content_w(w: f32) -> f32 { w - content_x() - EDGE }
+fn content_w(w: f32) -> f32 { w - SIDEBAR_W - 2.0 * PAD }
+
+fn content_right(w: f32) -> f32 { w - PAD }
+
+fn body_bottom(h: f32) -> f32 { h - FOOT_H }
 
 fn upper(s: const u8[:]) -> u8[>..] {
     var out: u8[>..] = [];
@@ -82,7 +88,7 @@ fn chosen(s: const State&) -> bool { s.selected >= 0 && s.selected < s.rows.len 
 
 fn readiness(r: const catalogue::Row&, s: const State&) -> const u8[:], ui::Color {
     if s.busy { return "PREPARING", theme::ACCENT; }
-    if r.ready { return "READY", theme::LEAF; }
+    if r.ready { return "PREPARED", theme::LEAF; }
     if s.stage == collection::STAGE_FAILED { return "FAILED", theme::RUST; }
     return "NOT PREPARED", theme::MUTED;
 }
@@ -103,9 +109,17 @@ fn clock_text(minutes: i64) -> u8[>..] {
     out
 }
 
-// The heading every page but Play carries: a large name and a sentence.
-fn page_heading(p: const kit::Pen&, x: f32, y: f32, title: const u8[:], lead_one: const u8[:], lead_two: const u8[:]) {
-    let tw = kit::text(p, x, y, title, p.fonts.heading, theme::INK);
-    kit::text(p, x + tw + 28.0, y + 12.0, lead_one, p.fonts.small, theme::MUTED);
-    kit::text(p, x + tw + 28.0, y + 30.0, lead_two, p.fonts.small, theme::MUTED);
+// The heading every page carries: a large name and one sentence under it.
+// The pages lay their own controls against the same two lines.
+fn page_heading(p: const kit::Pen&, x: f32, y: f32, title: const u8[:], lead: const u8[:]) {
+    kit::text(p, x, y, title, p.fonts.title, theme::INK);
+    kit::text(p, x, y + 46.0, lead, p.fonts.small, theme::MUTED);
+}
+
+// The small print every page shares, so the legal line has one home.
+fn draw_foot(p: const kit::Pen&, w: f32, h: f32) {
+    let t = specimen::current();
+    kit::text(p, content_x(), h - 21.0, str("LAUNCHER ", t.version, "  ·  ", upper(t.scientific)),
+              p.fonts.tiny, theme::FAINT);
+    kit::text_right(p, content_right(w), h - 21.0, "NOT AN OFFICIAL MINECRAFT PRODUCT", p.fonts.tiny, theme::FAINT);
 }

@@ -8,33 +8,42 @@ namespace theme;
 
 // The roles are variables, filled from a palette.Palette, so a theme switch
 // reaches every view without passing the palette through each call.
-var BG = palette::AMETHYST.bg;
-var SURFACE = palette::AMETHYST.surface;
-var SURFACE_HOVER = palette::AMETHYST.surface_hover;
-var LINE = palette::AMETHYST.line;
-var INK = palette::AMETHYST.ink;
-var MUTED = palette::AMETHYST.muted;
-var FAINT = palette::AMETHYST.faint;
-var ACCENT = palette::AMETHYST.accent;
-var ACCENT_HOVER = palette::AMETHYST.accent_hover;
-var ON_ACCENT = palette::AMETHYST.on_accent;
-var LEAF = palette::AMETHYST.leaf;
-var RUST = palette::AMETHYST.rust;
-var PANEL = palette::AMETHYST.panel;
-var CHIP = palette::AMETHYST.chip;
-var GLOW = palette::AMETHYST.glow;
-var SKYLINE = palette::AMETHYST.skyline;
-var BAND_ACCENT = palette::AMETHYST.band_accent;
-var BAND_LEAF = palette::AMETHYST.band_leaf;
-var BAND_STONE = palette::AMETHYST.band_stone;
+var BG = palette::NIGHT.bg;
+var SURFACE = palette::NIGHT.surface;
+var SURFACE_HOVER = palette::NIGHT.surface_hover;
+var LINE = palette::NIGHT.line;
+var INK = palette::NIGHT.ink;
+var MUTED = palette::NIGHT.muted;
+var FAINT = palette::NIGHT.faint;
+var ACCENT = palette::NIGHT.accent;
+var ACCENT_HOVER = palette::NIGHT.accent_hover;
+var ON_ACCENT = palette::NIGHT.on_accent;
+var LEAF = palette::NIGHT.leaf;
+var RUST = palette::NIGHT.rust;
+var PANEL = palette::NIGHT.panel;
+var CHIP = palette::NIGHT.chip;
+var GLOW = palette::NIGHT.glow;
+var GLASS = palette::NIGHT.glass;
+var ACCENT_SOFT = palette::NIGHT.accent_soft;
+var SHADOW = palette::NIGHT.shadow;
+var SKYLINE = palette::NIGHT.skyline;
+var BAND_ACCENT = palette::NIGHT.band_accent;
+var BAND_LEAF = palette::NIGHT.band_leaf;
+var BAND_STONE = palette::NIGHT.band_stone;
 var CURRENT: i64 = 0;
 let NONE = ui::Color { 0, 0, 0, 0 };
+let WHITE = ui::Color { 255, 255, 255, 255 };
 
 let INTER: const u8[:] = embed_file("../../assets/fonts/Inter-Regular.otf");
 let INTER_MEDIUM: const u8[:] = embed_file("../../assets/fonts/Inter-Medium.otf");
 let INTER_ITALIC: const u8[:] = embed_file("../../assets/fonts/Inter-Italic.otf");
 let DISPLAY: const u8[:] = embed_file("../../assets/fonts/InterDisplay-SemiBold.otf");
+let DISPLAY_BOLD: const u8[:] = embed_file("../../assets/fonts/InterDisplay-Bold.otf");
 let MONO: const u8[:] = embed_file("../../assets/fonts/JetBrainsMono-Regular.ttf");
+
+// The Play page's backdrop: zoo's own client drawing its demo world. It is
+// zoo's picture of itself, so no Minecraft art is shipped or copied.
+let BACKDROP: const u8[:] = embed_file("../../docs/media/client.png");
 
 struct Fonts {
     atlas: ui::FontAtlas,
@@ -55,15 +64,15 @@ fn load_fonts() -> Fonts, bool {
     let a = ui::create_font_atlas();
     var f = Fonts {
         atlas: a,
-        body: ui::add_font_from_memory(a, INTER, 15.0),
-        medium: ui::add_font_from_memory(a, INTER_MEDIUM, 15.0),
-        small: ui::add_font_from_memory(a, INTER, 13.0),
-        italic: ui::add_font_from_memory(a, INTER_ITALIC, 16.0),
-        mono: ui::add_font_from_memory(a, MONO, 13.0),
+        body: ui::add_font_from_memory(a, INTER, 14.0),
+        medium: ui::add_font_from_memory(a, INTER_MEDIUM, 14.0),
+        small: ui::add_font_from_memory(a, INTER, 12.0),
+        italic: ui::add_font_from_memory(a, INTER_ITALIC, 15.0),
+        mono: ui::add_font_from_memory(a, MONO, 12.0),
         tiny: ui::add_font_from_memory(a, MONO, 10.0),
-        heading: ui::add_font_from_memory(a, DISPLAY, 42.0),
-        title: ui::add_font_from_memory(a, DISPLAY, 60.0),
-        hero: ui::add_font_from_memory(a, DISPLAY, 104.0),
+        heading: ui::add_font_from_memory(a, DISPLAY, 20.0),
+        title: ui::add_font_from_memory(a, DISPLAY, 34.0),
+        hero: ui::add_font_from_memory(a, DISPLAY_BOLD, 64.0),
     };
     let ok = ui::bake(a);
     return f, ok;
@@ -79,7 +88,7 @@ fn apply(ctx: ui::Context) {
     ui::set_style(ctx, s);
 }
 
-// Takes a palette by its index in palette::PALETTES; out of range keeps Sand.
+// Takes a palette by its index in palette::PALETTES; out of range keeps Night.
 fn use_palette(ctx: ui::Context, theme_index: i64) {
     let theme_i = if theme_index >= 0 && theme_index < palette::PALETTES.len { theme_index } else { 0 };
     let t = palette::PALETTES[theme_i];
@@ -87,7 +96,8 @@ fn use_palette(ctx: ui::Context, theme_index: i64) {
     INK = t.ink; MUTED = t.muted; FAINT = t.faint;
     ACCENT = t.accent; ACCENT_HOVER = t.accent_hover; ON_ACCENT = t.on_accent;
     LEAF = t.leaf; RUST = t.rust;
-    PANEL = t.panel; CHIP = t.chip; GLOW = t.glow; SKYLINE = t.skyline;
+    PANEL = t.panel; CHIP = t.chip; GLOW = t.glow; GLASS = t.glass;
+    ACCENT_SOFT = t.accent_soft; SHADOW = t.shadow; SKYLINE = t.skyline;
     BAND_ACCENT = t.band_accent; BAND_LEAF = t.band_leaf; BAND_STONE = t.band_stone;
     CURRENT = theme_i;
     apply(ctx);

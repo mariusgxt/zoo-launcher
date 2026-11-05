@@ -1,7 +1,7 @@
-// One frame of the launcher window: the ground, the rail, the top bar, and
-// whichever page the rail points at. The pages read the state and say what
-// they want done; the main loop does it, so a frame has no side effects of
-// its own beyond what the state carries.
+// One frame of the launcher window: the ground, the page the sidebar points
+// at, the small print, and the sidebar itself. The pages read the state and
+// say what they want done; the main loop does it, so a frame has no side
+// effects of its own beyond what the state carries.
 import std;
 import ui;
 import zoo.minecraft.content;
@@ -24,20 +24,15 @@ fn draw(ctx: ui::Context, fonts: const theme::Fonts&, s: state::State&,
     if ui::begin(ctx, "zoo", ui::rect(0.0, 0.0, w, h), ui::WINDOW_NO_SCROLLBAR) {
         let p = kit::Pen { ctx: ctx, fonts: fonts };
         chrome::draw_ground(p, w, h);
-        // Only Play has no panel over the ground, so only Play can show it.
-        if s.page == state::PAGE_PLAY {
-            chrome::draw_skyline(p, kit::r(0.0, state::TOP_H, w, h - state::TOP_H), w, h);
-            want = play::draw(p, s, w, h);
-        }
-        else if s.page == state::PAGE_VERSIONS { versions::draw(p, s, w, h); }
+        if s.page == state::PAGE_PLAY { want = play::draw(p, s, items, found, w, h); }
+        else if s.page == state::PAGE_VERSIONS { want = versions::draw(p, s, w, h); }
         else if s.page == state::PAGE_CONTENT { shelf::draw(p, s, items, w, h); }
         else if s.page == state::PAGE_WORLDS { worlds::draw(p, s, found, w, h); }
         else if s.page == state::PAGE_SETTINGS { want = settings::draw(p, s, w, h); }
         else { want = label::draw(p, s, w, h); }
-        chrome::draw_top(p, s, w);
-        let rail_want = chrome::draw_rail(p, s, h);
+        state::draw_foot(p, w, h);
+        let rail_want = chrome::draw_sidebar(p, s, h);
         if rail_want != state::WANT_NOTHING { want = rail_want; }
-        chrome::draw_foot(p, s, w, h);
     }
     ui::end(ctx);
     want

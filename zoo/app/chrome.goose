@@ -1,106 +1,91 @@
-// The frame every page sits in: the ground behind it, the rail of icons down
-// the left, and the bar across the top. It follows the Gigacat launcher
-// concept (see THIRD_PARTY_NOTICES.md), with zoo's own pages on the rail.
+// The frame every page sits in: the ground behind it and the sidebar down
+// the left. The sidebar follows the Zenith client's rail of named pages and
+// the near-black panels of HQLauncher (both credited in
+// THIRD_PARTY_NOTICES.md), with zoo's own mark, facts and footer.
 import std;
 import ui;
-import zoo.specimen;
 import zoo.app.theme;
 import zoo.app.kit;
 import zoo.app.state;
 namespace chrome;
 
-// Block heights of the skyline, in 16 px steps. Fixed rather than random so
-// every frame, and every screenshot taken for the README, draws the same.
-let SKYLINE: i64[40] = [3, 5, 4, 8, 6, 6, 11, 9, 4, 7, 13, 10, 6, 5, 9, 12, 8, 4, 6, 10,
-                        7, 5, 3, 4, 9, 11, 6, 8, 5, 12, 7, 4, 10, 6, 9, 3, 7, 11, 5, 8];
-let BLOCK: f32 = 16.0;
-
-// The ground: a dark field and a lit corner where the concept has its glow.
+// The ground: a near-black field with one soft wash of the accent at the top,
+// which is where the hero image of the Play page meets it.
 fn draw_ground(p: const kit::Pen&, w: f32, h: f32) {
     ui::fill_rect(p.ctx, kit::r(0.0, 0.0, w, h), 0.0, theme::BG);
-    kit::glow(p, kit::r(w * 0.25, 0.0, w * 0.75, h * 0.8), theme::GLOW);
+    kit::veil_v(p, kit::r(0.0, 0.0, w, min(360.0, h * 0.45)),
+                kit::with_alpha(theme::ACCENT, 12), theme::NONE);
 }
 
-// The skyline that stands in for the screenshot the concept blurs behind
-// its play page. Only that page draws it: on a page covered by a panel it
-// would show as slivers in the gutters, which read as a drawing fault.
-fn draw_skyline(p: const kit::Pen&, box: ui::Rect, w: f32, h: f32) {
-    ui::push_scissor(p.ctx, box);
-    let base = box.y + box.h;
-    let cols = (box.w / BLOCK) as i64 + 1;
-    var i = 0;
-    while i < cols {
-        let bh = min(SKYLINE[i % SKYLINE.len] * BLOCK, box.h);
-        ui::fill_rect(p.ctx, kit::r(box.x + i * BLOCK, base - bh, BLOCK, bh), 0.0, theme::SKYLINE);
-        i++;
-    }
-    ui::push_scissor(p.ctx, kit::r(0.0, 0.0, w, h));
-}
-
-// Which pages the rail offers, top to bottom. Quit sits apart at the foot,
-// as the concept's exit icon does.
 let RAIL_PAGES: i64[6] = [state::PAGE_PLAY, state::PAGE_VERSIONS, state::PAGE_CONTENT,
                           state::PAGE_WORLDS, state::PAGE_SETTINGS, state::PAGE_SPECIMEN];
-let RAIL_LABELS: const u8[:][6] = ["PLAY", "VERSIONS", "CONTENT", "WORLDS", "SETUP", "LABEL"];
+let RAIL_LABELS: const u8[:][6] = ["Play", "Versions", "Content", "Worlds", "Setup", "Label"];
 
-fn draw_rail(p: const kit::Pen&, s: state::State&, h: f32) -> i64 {
+// The card under the mark: the version zoo would prepare, or the one it
+// has nothing for. It is the sidebar's stand-in for the concept's account.
+fn draw_chosen(p: const kit::Pen&, s: const state::State&) -> f32, f32 {
+    let x = 20.0;
+    let y = 104.0;
+    let w = state::SIDEBAR_W - 40.0;
+    let box = kit::r(x, y, w, 66.0);
+    ui::fill_rect(p.ctx, box, 12.0, theme::SURFACE);
+    ui::stroke_rect(p.ctx, box, 12.0, 1.0, theme::LINE);
+
+    let tile = kit::r(x + 12.0, y + 15.0, 36.0, 36.0);
+    ui::fill_rect(p.ctx, tile, 10.0, theme::BAND_STONE);
+    kit::glyph(p, tile.x + 18.0, tile.y + 18.0, kit::GLYPH_CONTENT,
+               if s.busy { theme::ACCENT } else { theme::MUTED });
+
+    let has = state::chosen(s);
+    var id: u8[>..] = [];
+    if has { kit::fit(id, s.rows[s.selected].id, p.fonts.medium, w - 70.0); }
+    else { id.append("No version"); }
+    kit::text(p, x + 58.0, y + 14.0, id, p.fonts.medium, if has { theme::INK } else { theme::MUTED });
+
+    var word: const u8[:] = "NO VERSION CHOSEN";
+    var color = theme::FAINT;
+    if has { word, color = state::readiness(s.rows[s.selected], s); }
+    kit::text(p, x + 58.0, y + 36.0, word, p.fonts.tiny, color);
+    kit::chevron(p, x + w - 24.0, y + 30.0, theme::FAINT);
+    return x, y;
+}
+
+fn draw_sidebar(p: const kit::Pen&, s: state::State&, h: f32) -> i64 {
     var want = state::WANT_NOTHING;
-    let x = state::EDGE;
-    let top = state::TOP_H;
-    let rail = kit::r(x, top, state::RAIL_W, h - top - state::EDGE);
-    ui::fill_rect(p.ctx, rail, 26.0, theme::SURFACE);
+    let w = state::SIDEBAR_W;
+    ui::fill_rect(p.ctx, kit::r(0.0, 0.0, w, h), 0.0, theme::PANEL);
+    ui::stroke_line(p.ctx, w - 0.5, 0.0, w - 0.5, h, 1.0, theme::LINE);
 
-    let item_h: f32 = 62.0;
-    var y = top + 16.0;
-    for page, i in RAIL_PAGES {
-        let box = kit::r(x + 6.0, y, state::RAIL_W - 12.0, item_h);
-        let active = s.page == page;
-        if kit::rail_item(p, box, RAIL_LABELS[i], kit::glyph_for(page), active) { s.page = page; }
-        y += item_h + 2.0;
-    }
-    // Leaving, at the foot of the rail and set off by a line.
-    let quit = kit::r(x + 6.0, h - state::EDGE - 16.0 - item_h, state::RAIL_W - 12.0, item_h);
-    kit::line(p, x + 14.0, x + state::RAIL_W - 14.0, quit.y - 10.0);
-    if kit::rail_item(p, quit, "QUIT", kit::GLYPH_QUIT, false) { want = state::WANT_QUIT; }
-    want
-}
-
-// The top bar: the mark, the clock, a badge counting what is prepared, and
-// the bar that the concept gives to its server population.
-fn draw_top(p: const kit::Pen&, s: const state::State&, w: f32) {
-    let tile = kit::r(state::EDGE, state::EDGE, state::RAIL_W - 6.0, state::RAIL_W - 6.0);
-    ui::fill_rect(p.ctx, tile, 18.0, theme::SURFACE);
-    ui::stroke_rect(p.ctx, tile, 18.0, 1.5, theme::LINE);
+    // The mark and the name, at the top of the rail.
+    let tile = kit::r(24.0, 24.0, 38.0, 38.0);
+    ui::fill_rect(p.ctx, tile, 12.0, theme::SURFACE);
+    ui::stroke_rect(p.ctx, tile, 12.0, 1.0, theme::LINE);
     kit::mark(p, tile);
+    kit::text(p, 74.0, 22.0, "zoo", p.fonts.title, theme::INK);
+    kit::text(p, 76.0, 60.0, "MINECRAFT: JAVA EDITION", p.fonts.tiny, theme::FAINT);
 
-    let x = state::content_x();
-    kit::text(p, x, state::EDGE + 18.0, state::clock_text(s.minutes), p.fonts.medium, theme::INK);
+    // What is chosen, and what state it is in.
+    let chosen_x, chosen_y = draw_chosen(p, s);
+    let chosen = kit::r(chosen_x, chosen_y, state::SIDEBAR_W - 40.0, 66.0);
+    if kit::clicked(p, chosen) { s.page = state::PAGE_VERSIONS; }
 
-    let total = s.rows.len;
-    let ready = state::prepared_count(s);
-    kit::badge(p, x + 128.0, state::EDGE + 30.0, 27.0, str(ready), str("/", total));
+    // The pages, top to bottom.
+    let item_h: f32 = 44.0;
+    var y: f32 = 192.0;
+    for page, i in RAIL_PAGES {
+        let box = kit::r(16.0, y, w - 32.0, item_h);
+        if kit::nav_item(p, box, RAIL_LABELS[i], kit::glyph_for(page), s.page == page) { s.page = page; }
+        y += item_h + 4.0;
+    }
 
-    let bar_x = x + 186.0;
-    let bar_w = min(430.0, w - bar_x - 330.0);
-    kit::progress(p, kit::r(bar_x, state::EDGE + 26.0, bar_w, 8.0), ready, max(total, 1));
-    kit::text_right(p, bar_x + bar_w, state::EDGE + 40.0, "versions prepared", p.fonts.tiny, theme::FAINT);
+    // The foot: the machine zoo found, the clock, and the way out.
+    kit::line(p, 20.0, w - 20.0, h - 118.0, theme::LINE);
+    ui::fill_circle(p.ctx, kit::r(24.0, h - 94.0, 6.0, 6.0), if s.game_found { theme::LEAF } else { theme::RUST });
+    kit::text(p, 38.0, h - 99.0, if s.game_found { "Minecraft found" } else { "Minecraft not found" },
+              p.fonts.small, theme::MUTED);
+    kit::text_right(p, w - 24.0, h - 99.0, state::clock_text(s.minutes), p.fonts.tiny, theme::FAINT);
 
-    // The right end carries what the concept puts there: a state and who is
-    // playing. zoo has no accounts, so it names the machine instead.
-    let avatar = kit::r(w - state::EDGE - 38.0, state::EDGE + 14.0, 38.0, 38.0);
-    ui::fill_rect(p.ctx, avatar, 12.0, theme::CHIP);
-    kit::text(p, avatar.x + 11.0, avatar.y + 10.0, "Z", p.fonts.medium, theme::ACCENT);
-    let name_w = kit::text_right(p, avatar.x - 14.0, state::EDGE + 24.0, state::upper(s.locality), p.fonts.mono, theme::INK);
-    let state_word = if s.game_found { "found" } else { "not found" };
-    let state_color = if s.game_found { theme::LEAF } else { theme::RUST };
-    let sw = kit::text_right(p, avatar.x - 14.0 - name_w - 18.0, state::EDGE + 24.0, state_word, p.fonts.mono, state_color);
-    kit::text_right(p, avatar.x - 14.0 - name_w - 18.0 - sw - 8.0, state::EDGE + 24.0, "Minecraft:", p.fonts.mono, theme::MUTED);
-}
-
-// The line of small print along the bottom of every page.
-fn draw_foot(p: const kit::Pen&, s: const state::State&, w: f32, h: f32) {
-    let t = specimen::current();
-    kit::text(p, state::content_x(), h - 26.0,
-              str("LAUNCHER ", t.version, "  ·  ", state::upper(t.scientific)), p.fonts.tiny, theme::FAINT);
-    kit::text_right(p, w - state::EDGE, h - 26.0, "NOT AN OFFICIAL MINECRAFT PRODUCT", p.fonts.tiny, theme::FAINT);
+    let quit = kit::r(16.0, h - 68.0, w - 32.0, 40.0);
+    if kit::nav_item(p, quit, "Quit", kit::GLYPH_QUIT, false) { want = state::WANT_QUIT; }
+    want
 }

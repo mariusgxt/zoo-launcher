@@ -15,6 +15,7 @@ import zoo.specimen;
 import zoo.diagnose;
 import zoo.fatal;
 import zoo.collection;
+import zoo.image.png;
 import zoo.minecraft.installs;
 import zoo.minecraft.content;
 import zoo.world.saves;
@@ -121,6 +122,20 @@ fn main() {
     guard ctx.id != 0 else { fatal::stop(str("The interface could not be set up.\n", ui::error())); }
     theme::use_palette(ctx, theme::load_choice(home));
 
+    // The Play page's backdrop: the client's own screenshot, decoded and
+    // uploaded once. A picture that fails to decode simply leaves the page
+    // on the ground, which is where it would have been anyway.
+    var backdrop_pixels: u8[>..] = [];
+    let backdrop_png = png::decode(theme::BACKDROP, backdrop_pixels);
+    var backdrop = ui::Image { texture: 0, w: 0, h: 0 };
+    if backdrop_png.ok {
+        let tex = gfx::texture2d(backdrop_png.width, backdrop_png.height);
+        if tex.id != 0 && gfx::update_texture(tex, backdrop_pixels) {
+            backdrop = ui::Image { texture: tex.id, w: backdrop_png.width as! u16,
+                                   h: backdrop_png.height as! u16 };
+        }
+    }
+
     let thread = thread_spawn(worker::run);
     let game_dir = platform::minecraft_dir();
     var rows: catalogue::Row[>..] = [];
@@ -133,7 +148,7 @@ fn main() {
         page: opts.page, scroll: 0.0, shelf: state::SHELF_MODS,
         busy: false, stage: 0, status: [], list_note: [], home: home,
         game_dir: game_dir, game_found: is_dir(game_dir), locality: locality,
-        theme_pick: 0, minutes: platform::clock_minutes(),
+        theme_pick: 0, minutes: platform::clock_minutes(), backdrop: backdrop,
     };
     var items: content::Item[>..] = [];
     content::scan(game_dir, content::KIND_MODS, items);

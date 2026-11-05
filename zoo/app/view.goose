@@ -91,8 +91,8 @@ fn draw_stage(p: const kit::Pen&, w: f32, bottom: f32) {
     var i = 0;
     while i < cols {
         let blocks = SKYLINE[i % SKYLINE.len];
-        let bh = blocks as f32 * BLOCK;
-        ui::fill_rect(p.ctx, kit::r(x0 + (i as f32) * BLOCK, bottom - bh, BLOCK, bh), 0.0, theme::SKYLINE);
+        let bh = blocks * BLOCK;
+        ui::fill_rect(p.ctx, kit::r(x0 + i * BLOCK, bottom - bh, BLOCK, bh), 0.0, theme::SKYLINE);
         i++;
     }
 }

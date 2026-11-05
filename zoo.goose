@@ -163,7 +163,7 @@ fn main() {
             ask(worker::ASK_MANIFEST, home, empty_job());
         }
 
-        gfx::begin_screen(float4 { theme::BG.r as f32 / 255.0, theme::BG.g as f32 / 255.0, theme::BG.b as f32 / 255.0, 1.0 });
+        gfx::begin_screen(float4 { theme::BG.r / 255.0, theme::BG.g / 255.0, theme::BG.b / 255.0, 1.0 });
         gfx::end_pass();
         ui::render(ctx);
         drawn++;

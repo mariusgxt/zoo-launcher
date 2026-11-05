@@ -48,12 +48,15 @@ fn data_dir() -> u8[>..] {
     return str(home(), "/.local/share/zoo");
 }
 
-// make_dir only makes the last part, so the parents are made first.
+// make_dir only makes the last part, so the parents are made first. It
+// also reports false for a folder that is already there, which on a second
+// start is the normal case, so the result is whether the folder exists.
 fn make_dirs(path: const u8[:]) -> bool {
     for i in 1..path.len {
         if path[i] == '/' && path[i - 1] != ':' && path[i - 1] != '/' { make_dir(path[..i]); }
     }
-    return make_dir(path);
+    make_dir(path);
+    return is_dir(path);
 }
 
 fn parent(path: const u8[:]) -> const u8[:] {

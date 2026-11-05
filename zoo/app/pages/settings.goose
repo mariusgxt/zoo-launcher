@@ -3,6 +3,7 @@
 // of choosing an accent, which suits zoo's themes exactly.
 import std;
 import ui;
+import zoo.specimen;
 import zoo.app.palette;
 import zoo.app.theme;
 import zoo.app.kit;
@@ -68,5 +69,16 @@ fn draw(p: const kit::Pen&, s: state::State&, w: f32, h: f32) -> i64 {
     draw_line(p, work.x + 20.0, work.y + 44.0, bw, "Versions", versions, theme::INK);
     let note = if s.status.len > 0 { str(s.status) } else { str(s.list_note) };
     draw_line(p, work.x + 20.0, work.y + 72.0, bw, "Last step", note, theme::MUTED);
+
+    // The label of this build, which otherwise only the Label page carries.
+    // Without it the panel ended in a hand's width of empty surface.
+    let t = specimen::current();
+    let tag = kit::r(panel.x + 24.0, work.y + work.h + 16.0, bw,
+                     max(96.0, panel.y + panel.h - 24.0 - (work.y + work.h + 16.0)));
+    draw_block(p, tag, "This build");
+    draw_line(p, tag.x + 20.0, tag.y + 44.0, bw, "Specimen",
+              str(t.version, "  ", t.scientific, " (", t.common, ")"), theme::INK);
+    draw_line(p, tag.x + 20.0, tag.y + 72.0, bw, "Accession",
+              str(t.accession, "  ·  collected ", t.collected), theme::MUTED);
     want
 }

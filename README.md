@@ -31,8 +31,16 @@ This repository holds both. The launcher works today, and the client draws its f
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/media/launcher.png" alt="The launcher's Play page: the chosen version, its state and Prepare"></td>
-    <td width="50%"><img src="docs/media/launcher-versions.png" alt="The launcher's Versions page: releases and snapshots with their state"></td>
+    <td width="50%"><img src="docs/media/launcher.png" alt="The Play page: zoo's own client render, the chosen version and the Prepare dock"><br><sub>Play: zoo's own render, the chosen version, and one dock that prepares it.</sub></td>
+    <td width="50%"><img src="docs/media/launcher-versions.png" alt="The Versions page: the Mojang catalogue as a table, with the chosen version beside it"><br><sub>Versions: the whole catalogue as a table, with the chosen version beside it.</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/media/launcher-worlds.png" alt="The Worlds page: one card per save, each with a scene drawn from its data"><br><sub>Worlds: each save as a card, with a small scene drawn from its data.</sub></td>
+    <td width="50%"><img src="docs/media/launcher-setup.png" alt="The Setup page: colour schemes, folders and the state of the collection"><br><sub>Setup: the colour schemes, the folders zoo uses, and where the last step got to.</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/media/launcher-content.png" alt="The Content page: mods, shaders and resource packs in one table"><br><sub>Content: mods, shaders and resource packs from your own Minecraft folder.</sub></td>
+    <td width="50%"><img src="docs/media/launcher-label.png" alt="The Label page: the specimen this build is catalogued under"><br><sub>Label: the specimen this build is catalogued under.</sub></td>
   </tr>
 </table>
 

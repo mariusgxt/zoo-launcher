@@ -25,22 +25,26 @@ Minecraft product. Not approved by or associated with Mojang or Microsoft.
 
 The launcher's layout follows three published launcher concepts. zoo redraws
 everything in code, with its own colours, text and mark; no images, fonts or
-files from any of them are used.
+files from any of them are used. The Play page's picture is zoo's own client
+drawing a test world, not an asset from any design.
 
+- **Zenith client** in *Minecraft Java Edition Launcher* by voidmax, Figma
+  Community (https://www.figma.com/community/file/1622169498397413530),
+  licensed under CC BY 4.0
+  (https://creativecommons.org/licenses/by/4.0/). The frame comes from this
+  one: the sidebar of named pages with the chosen version at its head, the
+  hero picture with the title centred over it, the floating dock that holds
+  the version picker, the main action and two icon buttons, the small state
+  pill above the title, and the row of cards under the hero.
+- **HQLauncher**, a Figma community design
+  (https://www.figma.com/design/A1ON5O3moAjptWHjsvQeGW). Its near-black
+  panels, hairline table and settings rows, toolbar tabs above a list, small
+  type and accent-swatch row shaped the version list, the content list, Setup
+  and the themes card on Label.
 - **Gigacat prototype launcher** by ツMonkesha, Figma Community
   (https://www.figma.com/community/file/1593718159027974699), licensed under
-  CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/). The frame comes
-  from this one: the rail of icons down the left, the top bar with its clock,
-  badge and bar, the wordmark over a lit ground, the pills under it, and the
-  row of cards along the foot. The "Amethyst" theme uses colours sampled from
-  it. The content, worlds, setup and label pages follow its mods, map,
-  settings and account pages.
-- **Minecraft Java Edition Launcher** by voidmax, Figma Community
-  (https://www.figma.com/community/file/1622169498397413530), licensed under
-  CC BY 4.0. The action bar that holds the version picker, the main button
-  and the icon buttons together on one panel is from this one, as is the
-  small state pill above the title.
-- **HQLauncher**, a Figma community design
-  (https://www.figma.com/design/A1ON5O3moAjptWHjsvQeGW). Its plainer table
-  rules for long lists and its swatch row for choosing an accent colour
-  shaped zoo's version list and theme picker.
+  CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/). The "Amethyst"
+  colour scheme samples its palette, and the mapping of its account page onto
+  zoo's Label page — a profile card, a row of figures, a strip of saved
+  looks — is still its shape.
+

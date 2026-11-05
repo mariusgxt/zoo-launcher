@@ -52,3 +52,106 @@ manifest = {
 }
 json.dump(manifest, open(f"{root}/version_manifest_v2.json", "w"))
 print("fixtures written, jar sha1", jar_sha1)
+
+
+# --- a tiny world: one level.dat and two region files -----------------------
+# No Mojang data is involved; the chunks are written here from scratch in the
+# 1.18+ shape (sections with a block_states palette) so the world reader has
+# something with a known answer to parse.
+import gzip, struct, zlib
+
+
+def nbt_tag(kind, name, payload):
+    n = name.encode()
+    return bytes([kind]) + struct.pack(">H", len(n)) + n + payload
+
+
+def nbt_str(s):
+    b = s.encode()
+    return struct.pack(">H", len(b)) + b
+
+
+def nbt_compound(members):
+    return b"".join(nbt_tag(k, n, p) for n, (k, p) in members.items()) + b"\x00"
+
+
+def nbt_list(kind, items):
+    return bytes([kind]) + struct.pack(">i", len(items)) + b"".join(items)
+
+
+def packed_longs(indices, bits):
+    per = 64 // bits
+    out = []
+    for i in range(0, len(indices), per):
+        word = 0
+        for j, v in enumerate(indices[i:i + per]):
+            word |= v << (j * bits)
+        out.append(word)
+    return nbt_list_longs(out)
+
+
+def nbt_list_longs(values):
+    return struct.pack(">i", len(values)) + b"".join(struct.pack(">q", v - (1 << 64) if v >= (1 << 63) else v) for v in values)
+
+
+def section(y, lower_half_stone=True):
+    # Blocks y 0..7 of the section are stone, 8..15 air: index = y*256 + z*16 + x.
+    idx = [1 if (i // 256) < 8 and lower_half_stone else 0 for i in range(4096)]
+    block_states = nbt_compound({
+        "palette": (9, nbt_list(10, [
+            nbt_compound({"Name": (8, nbt_str("minecraft:air"))}),
+            nbt_compound({"Name": (8, nbt_str("minecraft:stone"))}),
+        ])),
+        "data": (12, packed_longs(idx, 4)),
+    })
+    return nbt_compound({"Y": (1, struct.pack("b", y)), "block_states": (10, block_states)})
+
+
+def chunk_nbt(cx, cz):
+    root = nbt_compound({
+        "DataVersion": (3, struct.pack(">i", 3953)),
+        "xPos": (3, struct.pack(">i", cx)),
+        "zPos": (3, struct.pack(">i", cz)),
+        "yPos": (3, struct.pack(">i", -4)),
+        "Status": (8, nbt_str("minecraft:full")),
+        "sections": (9, nbt_list(10, [section(0), section(1, lower_half_stone=False)])),
+    })
+    return nbt_tag(10, "", root)
+
+
+def region(chunks):
+    header = bytearray(8192)
+    body = b""
+    sector = 2
+    for (cx, cz), nbt in chunks.items():
+        payload = zlib.compress(nbt, 6)
+        frame = struct.pack(">i", len(payload) + 1) + b"\x02" + payload
+        frame += b"\x00" * (-len(frame) % 4096)
+        count = len(frame) // 4096
+        i = 4 * ((cx % 32) + (cz % 32) * 32)
+        header[i:i + 3] = sector.to_bytes(3, "big")
+        header[i + 3] = count
+        header[4096 + i:4096 + i + 4] = (1762300000).to_bytes(4, "big")
+        body += frame
+        sector += count
+    return bytes(header) + body
+
+
+world = f"{root}/world"
+os.makedirs(f"{world}/region", exist_ok=True)
+
+level = nbt_tag(10, "", nbt_compound({"Data": (10, nbt_compound({
+    "LevelName": (8, nbt_str("zoo test")),
+    "DataVersion": (3, struct.pack(">i", 3953)),
+    "SpawnX": (3, struct.pack(">i", 8)),
+    "SpawnY": (3, struct.pack(">i", 72)),
+    "SpawnZ": (3, struct.pack(">i", -40)),
+    "BorderSize": (6, struct.pack(">d", 59999968.0)),
+    "hardcore": (1, struct.pack("b", 0)),
+    "RandomSeed": (4, struct.pack(">q", -8723617261238761234)),
+}))}))
+open(f"{world}/level.dat", "wb").write(gzip.compress(level))
+
+open(f"{world}/region/r.0.0.mca", "wb").write(region({(0, 0): chunk_nbt(0, 0), (1, 0): chunk_nbt(1, 0)}))
+open(f"{world}/region/r.-1.-1.mca", "wb").write(region({(-1, -1): chunk_nbt(-1, -1)}))
+print("world fixture written")

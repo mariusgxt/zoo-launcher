@@ -11,6 +11,9 @@ import zoo.prepare;
 import zoo.collection;
 import zoo.platform;
 import zoo.specimen;
+import zoo.archive.compress;
+import zoo.world.nbt;
+import zoo.world.region;
 
 var failures = 0;
 
@@ -92,6 +95,46 @@ fn test_download() {
     check("download and prepare", ok && file_exists("test/out/dl/versions/26.3/client.jar"));
 }
 
+fn test_nbt() {
+    var raw: u8[>..] = [];
+    check("level.dat readable", read_file("test/data/world/level.dat", raw));
+    var plain: u8[>..] = [];
+    check("level.dat is gzip", compress::gzip(raw, plain));
+    var tags: nbt::Node[>..] = [];
+    check("level.dat parses", nbt::read(plain, tags));
+    let data = nbt::member(plain, tags, 0, "Data");
+    check("Data compound", data > 0 && tags[data].kind == nbt::COMPOUND);
+    check("LevelName", nbt::text_of(plain, tags, nbt::member(plain, tags, 0, "Data", "LevelName")) == "zoo test");
+    check("SpawnY", nbt::int_of(tags, nbt::member(plain, tags, 0, "Data", "SpawnY"), 0) == 72);
+    check("negative int", nbt::int_of(tags, nbt::member(plain, tags, 0, "Data", "SpawnZ"), 0) == -40);
+    check("long", nbt::int_of(tags, nbt::member(plain, tags, 0, "Data", "RandomSeed"), 0) == -8723617261238761234);
+    check("missing member", nbt::member(plain, tags, 0, "Data", "Nope") == -1);
+    let border = nbt::member(plain, tags, 0, "Data", "BorderSize");
+    check("double", border > 0 && tags[border].dec == 59999968.0);
+    check("truncated input refused", !nbt::read(plain[..plain.len / 2], tags));
+}
+
+fn test_region() {
+    var file: u8[>..] = [];
+    check("region readable", read_file("test/data/world/region/r.0.0.mca", file));
+    check("chunk 0,0 present", region::exists(file, 0, 0));
+    check("chunk 5,5 absent", !region::exists(file, 5, 5));
+    var raw: u8[>..] = [];
+    check("chunk 0,0 inflates", region::chunk(file, 0, 0, raw));
+    var tags: nbt::Node[>..] = [];
+    check("chunk 0,0 parses", nbt::read(raw, tags));
+    check("chunk x", nbt::int_of(tags, nbt::member(raw, tags, 0, "xPos"), 99) == 0);
+    check("chunk status", nbt::text_of(raw, tags, nbt::member(raw, tags, 0, "Status")) == "minecraft:full");
+    let sections = nbt::member(raw, tags, 0, "sections");
+    check("two sections", sections > 0 && tags[sections].count == 2);
+    let rx, rz = region::region_of(-1, -1);
+    check("negative region", rx == -1 && rz == -1);
+    var neg: u8[>..] = [];
+    check("negative chunk file", region::read_file_of("test/data/world/region", -1, -1, neg));
+    var raw2: u8[>..] = [];
+    check("negative chunk reads", region::chunk(neg, -1, -1, raw2) && raw2.len > 0);
+}
+
 fn main() {
     var label: u8[>..] = [];
     specimen::format_label(label, specimen::current(), platform::name());
@@ -100,6 +143,8 @@ fn main() {
     test_zip();
     test_meta();
     test_prepare();
+    test_nbt();
+    test_region();
     test_download();
     if failures == 0 { print("all passed"); } else { print(failures, " failed"); }
     if failures > 0 { exit(1); }

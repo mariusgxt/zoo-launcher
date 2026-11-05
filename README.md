@@ -8,6 +8,7 @@
   <img src="https://img.shields.io/badge/Minecraft-Java%2026.3-5D9C3F" alt="Minecraft Java 26.3">
   <img src="https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-2A2470" alt="Windows, Linux and macOS">
   <img src="https://img.shields.io/badge/specimen-Panthera%20leo-7A3F1C" alt="Current specimen: Panthera leo">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-3B2F7E" alt="MIT license"></a>
 </p>
 
 <p align="center">
@@ -56,7 +57,17 @@ Builds for Windows x64 and Linux x86-64 are attached to each [release](https://g
 
 ## Build from source
 
-You need the Goose compiler built with its graphics packages, CMake and a C compiler (MSVC 2022 or clang on Windows, gcc or clang elsewhere). On Linux, libcurl's development files and SDL's X11 or Wayland packages are needed too.
+You need the Goose compiler and a C compiler: Visual Studio 2022 (with "Desktop development with C++") or clang on Windows, gcc or clang elsewhere. On Linux, libcurl's development files are needed too.
+
+On Windows, the prebuilt compiler installs with one command and goes on your PATH:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tools\install-goose.ps1
+goose build zoo.goose
+.\zoo-launcher.exe
+```
+
+On Linux or macOS, unpack the matching archive from [Goose's releases](https://github.com/aardappel/goose/releases) and put its folder on PATH, or build it:
 
 ```sh
 git clone --branch v2026.3 https://github.com/aardappel/goose
@@ -124,7 +135,7 @@ Issues and pull requests are welcome. Run `goose tests.goose` before sending a c
 
 ## Licence
 
-Not chosen yet. Third-party parts are listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+MIT, see [LICENSE](LICENSE). Third-party parts are listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 ## Author
 

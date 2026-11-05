@@ -14,6 +14,7 @@ import zoo.specimen;
 import zoo.archive.compress;
 import zoo.world.nbt;
 import zoo.world.region;
+import zoo.world.chunk;
 
 var failures = 0;
 
@@ -135,6 +136,33 @@ fn test_region() {
     check("negative chunk reads", region::chunk(neg, -1, -1, raw2) && raw2.len > 0);
 }
 
+fn test_chunk() {
+    var file: u8[>..] = [];
+    read_file("test/data/world/region/r.0.0.mca", file);
+    var raw: u8[>..] = [];
+    region::chunk(file, 0, 0, raw);
+    var tags: nbt::Node[>..] = [];
+    nbt::read(raw, tags);
+    var layers: chunk::Layer[>..] = [];
+    var blocks: u16[>..] = [];
+    let info = chunk::read(raw, tags, layers, blocks);
+    check("chunk decoded", info.ok && info.layers == 2);
+    check("chunk position", info.cx == 0 && info.cz == 0);
+    check("blocks unpacked", blocks.len == 2 * 4096);
+    check("palette of two", chunk::palette_size(tags, layers[0].palette) == 2);
+    check("palette names", chunk::palette_name(raw, tags, layers[0].palette, 1) == "minecraft:stone");
+    check("air index", chunk::index_of(raw, tags, layers[0].palette, "minecraft:air") == 0);
+    check("unknown name", chunk::index_of(raw, tags, layers[0].palette, "minecraft:water") == -1);
+    // The fixture fills y 0..7 of the lower section with stone and leaves the
+    // rest air, so the seam is what proves the bit unpacking.
+    check("stone below", chunk::block_at(blocks, layers[0], 3, 7, 11) == 1);
+    check("air above", chunk::block_at(blocks, layers[0], 3, 8, 11) == 0);
+    check("upper section empty", chunk::block_at(blocks, layers[1], 0, 0, 0) == 0);
+    check("out of range", chunk::block_at(blocks, layers[0], 16, 0, 0) == -1);
+    check("bits for palette", chunk::bits_for(2) == 4 && chunk::bits_for(17) == 5 && chunk::bits_for(300) == 9);
+    check("layer by height", chunk::layer_of(layers, 5) == 0 && chunk::layer_of(layers, 20) == 1 && chunk::layer_of(layers, 200) == -1);
+}
+
 fn main() {
     var label: u8[>..] = [];
     specimen::format_label(label, specimen::current(), platform::name());
@@ -145,6 +173,7 @@ fn main() {
     test_prepare();
     test_nbt();
     test_region();
+    test_chunk();
     test_download();
     if failures == 0 { print("all passed"); } else { print(failures, " failed"); }
     if failures > 0 { exit(1); }

@@ -56,8 +56,8 @@ fn draw(p: const kit::Pen&, s: state::State&, found: const saves::Save[:], w: f3
                         "The zoo client reads these; the launcher only lists them.");
 
     if found.len == 0 {
-        kit::text(p, panel.x + 24.0, panel.y + 110.0, "No worlds found.", p.fonts.body, theme::MUTED);
-        kit::text(p, panel.x + 24.0, panel.y + 134.0, str("zoo looks in ", s.game_dir, "/saves"), p.fonts.small, theme::FAINT);
+        kit::empty_note(p, kit::r(panel.x + 24.0, panel.y + 100.0, panel.w - 48.0, 96.0),
+                        "No worlds here yet", str("zoo looks in ", s.game_dir, "/saves"));
         return;
     }
 

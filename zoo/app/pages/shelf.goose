@@ -66,8 +66,9 @@ fn draw(p: const kit::Pen&, s: state::State&, items: content::Item[>..]&, w: f32
     let row_h: f32 = 62.0;
 
     if items.len == 0 {
-        kit::text(p, list_x, top + 8.0, str("Nothing in ", content::folder_of(kind), " yet."), p.fonts.body, theme::MUTED);
-        kit::text(p, list_x, top + 32.0, str("zoo looks in ", s.game_dir, "/", content::folder_of(kind)), p.fonts.small, theme::FAINT);
+        kit::empty_note(p, kit::r(list_x, top, list_w, 96.0),
+                        str("Nothing in ", content::folder_of(kind), " yet"),
+                        str("zoo looks in ", s.game_dir, "/", content::folder_of(kind)));
         return;
     }
 

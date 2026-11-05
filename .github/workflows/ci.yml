@@ -1,0 +1,106 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+    tags: ["v*"]
+  pull_request:
+
+permissions:
+  contents: write
+
+env:
+  GOOSE_REF: v2026.3
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            name: linux-x64
+            goose: goose/build/goose
+            exe: zoo-launcher
+          - os: windows-2022
+            name: windows-x64
+            goose: goose/build/Release/goose.exe
+            exe: zoo-launcher.exe
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Linux packages
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libcurl4-openssl-dev libx11-dev libxext-dev libxrandr-dev \
+            libxcursor-dev libxi-dev libxss-dev libxtst-dev libxfixes-dev libxkbcommon-dev \
+            libwayland-dev libgl-dev libvulkan-dev mesa-vulkan-drivers
+
+      - name: Cache the Goose compiler
+        id: goose-cache
+        uses: actions/cache@v4
+        with:
+          path: goose
+          key: goose-${{ env.GOOSE_REF }}-${{ matrix.name }}-1
+
+      - name: Build the Goose compiler
+        shell: bash
+        run: |
+          if [ ! -f "${{ matrix.goose }}" ]; then
+            rm -rf goose
+            git clone --depth 1 --branch "$GOOSE_REF" https://github.com/aardappel/goose goose
+            cmake -S goose -B goose/build -DCMAKE_BUILD_TYPE=Release -DGOOSE_BUILTIN_LIBS=all
+            cmake --build goose/build --config Release --parallel
+          fi
+
+      - name: Build zoo
+        shell: bash
+        run: ./${{ matrix.goose }} build zoo.goose
+
+      - name: Test
+        shell: bash
+        run: |
+          (cd test/data && python -m http.server 8765 &)
+          sleep 2
+          ./${{ matrix.goose }} tests.goose
+
+      - name: Package
+        shell: bash
+        run: |
+          mkdir -p dist/zoo
+          cp ${{ matrix.exe }} README.md THIRD_PARTY_NOTICES.md dist/zoo/
+          cd dist
+          if [ "$RUNNER_OS" = "Windows" ]; then 7z a ../zoo-${{ matrix.name }}.zip zoo >/dev/null; else tar czf ../zoo-${{ matrix.name }}.tar.gz zoo; fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: zoo-${{ matrix.name }}
+          path: zoo-${{ matrix.name }}.*
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Release notes from the specimen label
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          {
+            echo "## zoo ${tag}"
+            echo
+            grep -A7 "version: \"${tag}\"" zoo/specimen.goose | sed -n 's/^ *\([a-z]*\): "\(.*\)",$/- **\1**: \2/p'
+            echo
+            echo "Unpack the archive for your system and start \`zoo-launcher\`."
+          } > notes.md
+          cat notes.md
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          body_path: notes.md

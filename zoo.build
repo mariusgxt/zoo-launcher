@@ -1,0 +1,9 @@
+// Native parts: networking and the platform probe, one file set per system.
+c_include = ["native"];
+c_sources_linux = ["native/http_curl.c", "native/platform_posix.c"];
+c_libs_linux = ["curl"];
+c_sources_macos = ["native/http_curl.c", "native/platform_posix.c"];
+c_libs_macos = ["curl"];
+c_sources_windows = ["native/http_winhttp.c", "native/platform_win.c"];
+c_libs_windows = ["winhttp"];
+output = "zoo-launcher";

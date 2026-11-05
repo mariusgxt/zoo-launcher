@@ -212,14 +212,15 @@ fn test_png() {
 
 fn test_saves() {
     var all: saves::Save[>..] = [];
-    check("saves found", saves::scan("test/data", all) == 1);
-    check("folder name", all[0].folder == "testworld");
-    check("name from level.dat", all[0].name == "zoo test");
-    check("data version read", all[0].version == 3953);
-    check("find by name", saves::find(all, "zoo test") == 0 && saves::find(all, "nope") == -1);
+    check("saves found", saves::scan("test/data", all) == 2);
+    let i = saves::find(all, "testworld");
+    check("find by folder", i >= 0);
+    check("name from level.dat", all[i].name == "zoo test");
+    check("data version read", all[i].version == 3953);
+    check("find by name", saves::find(all, "zoo test") == i && saves::find(all, "nope") == -1);
     check("no saves folder", saves::scan("test/data/png", all) == 0);
     var tiles: saves::Tile[>..] = [];
-    check("region files listed", saves::tiles(all[0], tiles) == 2);
+    check("region files listed", saves::tiles(all[i], tiles) == 2);
     var seen_neg = false;
     for t in tiles { if t.rx == -1 && t.rz == -1 { seen_neg = true; } }
     check("negative region tile", seen_neg);

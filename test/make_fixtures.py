@@ -52,3 +52,215 @@ manifest = {
 }
 json.dump(manifest, open(f"{root}/version_manifest_v2.json", "w"))
 print("fixtures written, jar sha1", jar_sha1)
+
+
+# --- a tiny world: one level.dat and two region files -----------------------
+# No Mojang data is involved; the chunks are written here from scratch in the
+# 1.18+ shape (sections with a block_states palette) so the world reader has
+# something with a known answer to parse.
+import gzip, struct, zlib
+
+
+def nbt_tag(kind, name, payload):
+    n = name.encode()
+    return bytes([kind]) + struct.pack(">H", len(n)) + n + payload
+
+
+def nbt_str(s):
+    b = s.encode()
+    return struct.pack(">H", len(b)) + b
+
+
+def nbt_compound(members):
+    return b"".join(nbt_tag(k, n, p) for n, (k, p) in members.items()) + b"\x00"
+
+
+def nbt_list(kind, items):
+    return bytes([kind]) + struct.pack(">i", len(items)) + b"".join(items)
+
+
+def packed_longs(indices, bits):
+    per = 64 // bits
+    out = []
+    for i in range(0, len(indices), per):
+        word = 0
+        for j, v in enumerate(indices[i:i + per]):
+            word |= v << (j * bits)
+        out.append(word)
+    return nbt_list_longs(out)
+
+
+def nbt_list_longs(values):
+    return struct.pack(">i", len(values)) + b"".join(struct.pack(">q", v - (1 << 64) if v >= (1 << 63) else v) for v in values)
+
+
+def section(y, lower_half_stone=True):
+    # Blocks y 0..7 of the section are stone, 8..15 air: index = y*256 + z*16 + x.
+    idx = [1 if (i // 256) < 8 and lower_half_stone else 0 for i in range(4096)]
+    block_states = nbt_compound({
+        "palette": (9, nbt_list(10, [
+            nbt_compound({"Name": (8, nbt_str("minecraft:air"))}),
+            nbt_compound({"Name": (8, nbt_str("minecraft:stone"))}),
+        ])),
+        "data": (12, packed_longs(idx, 4)),
+    })
+    return nbt_compound({"Y": (1, struct.pack("b", y)), "block_states": (10, block_states)})
+
+
+def chunk_nbt(cx, cz):
+    root = nbt_compound({
+        "DataVersion": (3, struct.pack(">i", 3953)),
+        "xPos": (3, struct.pack(">i", cx)),
+        "zPos": (3, struct.pack(">i", cz)),
+        "yPos": (3, struct.pack(">i", -4)),
+        "Status": (8, nbt_str("minecraft:full")),
+        "sections": (9, nbt_list(10, [section(0), section(1, lower_half_stone=False)])),
+    })
+    return nbt_tag(10, "", root)
+
+
+def region(chunks):
+    header = bytearray(8192)
+    body = b""
+    sector = 2
+    for (cx, cz), nbt in chunks.items():
+        payload = zlib.compress(nbt, 6)
+        frame = struct.pack(">i", len(payload) + 1) + b"\x02" + payload
+        frame += b"\x00" * (-len(frame) % 4096)
+        count = len(frame) // 4096
+        i = 4 * ((cx % 32) + (cz % 32) * 32)
+        header[i:i + 3] = sector.to_bytes(3, "big")
+        header[i + 3] = count
+        header[4096 + i:4096 + i + 4] = (1762300000).to_bytes(4, "big")
+        body += frame
+        sector += count
+    return bytes(header) + body
+
+
+world = f"{root}/saves/testworld"
+os.makedirs(f"{world}/region", exist_ok=True)
+
+level = nbt_tag(10, "", nbt_compound({"Data": (10, nbt_compound({
+    "LevelName": (8, nbt_str("zoo test")),
+    "DataVersion": (3, struct.pack(">i", 3953)),
+    "SpawnX": (3, struct.pack(">i", 8)),
+    "SpawnY": (3, struct.pack(">i", 72)),
+    "SpawnZ": (3, struct.pack(">i", -40)),
+    "BorderSize": (6, struct.pack(">d", 59999968.0)),
+    "hardcore": (1, struct.pack("b", 0)),
+    "RandomSeed": (4, struct.pack(">q", -8723617261238761234)),
+}))}))
+open(f"{world}/level.dat", "wb").write(gzip.compress(level))
+
+open(f"{world}/region/r.0.0.mca", "wb").write(region({(0, 0): chunk_nbt(0, 0), (1, 0): chunk_nbt(1, 0)}))
+open(f"{world}/region/r.-1.-1.mca", "wb").write(region({(-1, -1): chunk_nbt(-1, -1)}))
+print("world fixture written")
+
+
+# --- PNGs for the texture decoder ------------------------------------------
+# Written by hand rather than with Pillow: the fixtures must stay reproducible
+# and the repository free of another build dependency.
+def png(width, height, colour, pixels, palette=None, trns=None, filters=None):
+    def chunk(kind, body):
+        c = kind + body
+        return struct.pack(">I", len(body)) + c + struct.pack(">I", zlib.crc32(c) & 0xFFFFFFFF)
+
+    stride = {0: 1, 2: 3, 3: 1, 4: 2, 6: 4}[colour] * width
+    rows = b""
+    for y in range(height):
+        row = bytes(pixels[y * stride:(y + 1) * stride])
+        f = (filters or [0] * height)[y]
+        if f == 0:
+            rows += b"\x00" + row
+        elif f == 1:                       # Sub
+            step = stride // width
+            out = bytearray(row)
+            for i in range(stride - 1, step - 1, -1):
+                out[i] = (out[i] - out[i - step]) & 0xFF
+            rows += b"\x01" + bytes(out)
+        elif f == 2:                       # Up
+            prev = bytes(pixels[(y - 1) * stride:y * stride]) if y else b"\x00" * stride
+            rows += b"\x02" + bytes((row[i] - prev[i]) & 0xFF for i in range(stride))
+        else:
+            raise SystemExit("filter not written")
+    out = b"\x89PNG\r\n\x1a\n"
+    out += chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, colour, 0, 0, 0))
+    if palette:
+        out += chunk(b"PLTE", bytes(palette))
+    if trns:
+        out += chunk(b"tRNS", bytes(trns))
+    out += chunk(b"IDAT", zlib.compress(rows, 9))
+    out += chunk(b"IEND", b"")
+    return out
+
+
+pdir = f"{root}/png"
+os.makedirs(pdir, exist_ok=True)
+
+# 4x2 truecolour, second row filtered with Up so unfiltering is exercised.
+rgb = []
+for y in range(2):
+    for x in range(4):
+        rgb += [x * 60 + y, 128 - x * 10, 20 + y * 100]
+open(f"{pdir}/rgb.png", "wb").write(png(4, 2, 2, rgb, filters=[0, 2]))
+
+rgba = []
+for y in range(2):
+    for x in range(2):
+        rgba += [x * 100, y * 100, 50, 255 - x * 60]
+open(f"{pdir}/rgba.png", "wb").write(png(2, 2, 6, rgba, filters=[0, 1]))
+
+open(f"{pdir}/grey.png", "wb").write(png(3, 1, 0, [0, 127, 255]))
+open(f"{pdir}/indexed.png", "wb").write(
+    png(3, 1, 3, [0, 1, 2], palette=[255, 0, 0, 0, 255, 0, 0, 0, 255], trns=[0, 128]))
+print("png fixtures written")
+
+
+# --- a stand-in resources folder -------------------------------------------
+# Shaped like what prepare.goose writes out of a client jar, with the model
+# chains Mojang uses (cube_all, cube_column) so the resolver is tested on the
+# real inheritance, but with textures invented here.
+res = f"{root}/resources"
+for sub in ("blockstates", "models/block", "textures/block"):
+    os.makedirs(f"{res}/{sub}", exist_ok=True)
+
+
+def model(path, obj):
+    open(f"{res}/{path}", "w").write(json.dumps(obj))
+
+
+model("blockstates/stone.json", {"variants": {"": {"model": "minecraft:block/stone"}}})
+model("blockstates/grass_block.json", {"variants": {
+    "snowy=false": [{"model": "minecraft:block/grass_block", "weight": 1}],
+    "snowy=true": {"model": "minecraft:block/grass_block_snow"}}})
+model("blockstates/oak_log.json", {"variants": {"axis=y": {"model": "minecraft:block/oak_log"}}})
+model("blockstates/oak_fence.json", {"multipart": [
+    {"apply": {"model": "minecraft:block/oak_fence_post"}},
+    {"when": {"north": "true"}, "apply": {"model": "minecraft:block/oak_fence_side", "uvlock": True}}]})
+model("models/block/block.json", {"gui_light": "side"})
+model("models/block/cube.json", {"parent": "block/block"})
+model("models/block/cube_all.json", {"parent": "block/cube", "textures": {
+    "particle": "#all", "down": "#all", "up": "#all", "north": "#all"}})
+model("models/block/cube_column.json", {"parent": "block/cube", "textures": {"particle": "#side"}})
+model("models/block/stone.json", {"parent": "minecraft:block/cube_all",
+                                  "textures": {"all": "minecraft:block/stone"}})
+model("models/block/grass_block.json", {"parent": "block/block", "textures": {
+    "particle": "block/dirt", "bottom": "block/dirt",
+    "top": "block/grass_block_top", "side": "block/grass_block_side"}})
+model("models/block/oak_log.json", {"parent": "block/cube_column", "textures": {
+    "end": "block/oak_log_top", "side": "block/oak_log"}})
+model("models/block/oak_fence_post.json", {"parent": "block/block", "textures": {"texture": "block/oak_planks"}})
+
+# 16x16 textures, each a flat colour with a lighter top row so a wrong tile in
+# the atlas shows up at a glance.
+tints = {"stone": (125, 125, 125), "dirt": (134, 96, 67), "grass_block_top": (105, 150, 70),
+         "grass_block_side": (120, 110, 80), "oak_log": (150, 120, 70),
+         "oak_log_top": (176, 143, 86), "oak_planks": (162, 130, 78)}
+for name, (r_, g_, b_) in tints.items():
+    px = []
+    for y in range(16):
+        for x in range(16):
+            k = 40 if y == 0 else 0
+            px += [min(255, r_ + k), min(255, g_ + k), min(255, b_ + k), 255]
+    open(f"{res}/textures/block/{name}.png", "wb").write(png(16, 16, 6, px))
+print("resource fixture written")

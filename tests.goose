@@ -11,6 +11,15 @@ import zoo.prepare;
 import zoo.collection;
 import zoo.platform;
 import zoo.specimen;
+import zoo.archive.compress;
+import zoo.world.nbt;
+import zoo.world.region;
+import zoo.world.chunk;
+import zoo.image.png;
+import zoo.world.saves;
+import zoo.client.blockmodel;
+import zoo.client.atlas;
+import zoo.client.mesh;
 
 var failures = 0;
 
@@ -92,6 +101,219 @@ fn test_download() {
     check("download and prepare", ok && file_exists("test/out/dl/versions/26.3/client.jar"));
 }
 
+fn test_nbt() {
+    var raw: u8[>..] = [];
+    check("level.dat readable", read_file("test/data/saves/testworld/level.dat", raw));
+    var plain: u8[>..] = [];
+    check("level.dat is gzip", compress::gzip(raw, plain));
+    var tags: nbt::Node[>..] = [];
+    check("level.dat parses", nbt::read(plain, tags));
+    let data = nbt::member(plain, tags, 0, "Data");
+    check("Data compound", data > 0 && tags[data].kind == nbt::COMPOUND);
+    check("LevelName", nbt::text_of(plain, tags, nbt::member(plain, tags, 0, "Data", "LevelName")) == "zoo test");
+    check("SpawnY", nbt::int_of(tags, nbt::member(plain, tags, 0, "Data", "SpawnY"), 0) == 72);
+    check("negative int", nbt::int_of(tags, nbt::member(plain, tags, 0, "Data", "SpawnZ"), 0) == -40);
+    check("long", nbt::int_of(tags, nbt::member(plain, tags, 0, "Data", "RandomSeed"), 0) == -8723617261238761234);
+    check("missing member", nbt::member(plain, tags, 0, "Data", "Nope") == -1);
+    let border = nbt::member(plain, tags, 0, "Data", "BorderSize");
+    check("double", border > 0 && tags[border].dec == 59999968.0);
+    check("truncated input refused", !nbt::read(plain[..plain.len / 2], tags));
+}
+
+fn test_region() {
+    var file: u8[>..] = [];
+    check("region readable", read_file("test/data/saves/testworld/region/r.0.0.mca", file));
+    check("chunk 0,0 present", region::exists(file, 0, 0));
+    check("chunk 5,5 absent", !region::exists(file, 5, 5));
+    var raw: u8[>..] = [];
+    check("chunk 0,0 inflates", region::chunk(file, 0, 0, raw));
+    var tags: nbt::Node[>..] = [];
+    check("chunk 0,0 parses", nbt::read(raw, tags));
+    check("chunk x", nbt::int_of(tags, nbt::member(raw, tags, 0, "xPos"), 99) == 0);
+    check("chunk status", nbt::text_of(raw, tags, nbt::member(raw, tags, 0, "Status")) == "minecraft:full");
+    let sections = nbt::member(raw, tags, 0, "sections");
+    check("two sections", sections > 0 && tags[sections].count == 2);
+    let rx, rz = region::region_of(-1, -1);
+    check("negative region", rx == -1 && rz == -1);
+    var neg: u8[>..] = [];
+    check("negative chunk file", region::read_file_of("test/data/saves/testworld/region", -1, -1, neg));
+    var raw2: u8[>..] = [];
+    check("negative chunk reads", region::chunk(neg, -1, -1, raw2) && raw2.len > 0);
+}
+
+fn test_chunk() {
+    var file: u8[>..] = [];
+    read_file("test/data/saves/testworld/region/r.0.0.mca", file);
+    var raw: u8[>..] = [];
+    region::chunk(file, 0, 0, raw);
+    var tags: nbt::Node[>..] = [];
+    nbt::read(raw, tags);
+    var layers: chunk::Layer[>..] = [];
+    var blocks: u16[>..] = [];
+    let info = chunk::read(raw, tags, layers, blocks);
+    check("chunk decoded", info.ok && info.layers == 2);
+    check("chunk position", info.cx == 0 && info.cz == 0);
+    check("blocks unpacked", blocks.len == 2 * 4096);
+    check("palette of two", chunk::palette_size(tags, layers[0].palette) == 2);
+    check("palette names", chunk::palette_name(raw, tags, layers[0].palette, 1) == "minecraft:stone");
+    check("air index", chunk::index_of(raw, tags, layers[0].palette, "minecraft:air") == 0);
+    check("unknown name", chunk::index_of(raw, tags, layers[0].palette, "minecraft:water") == -1);
+    // The fixture fills y 0..7 of the lower section with stone and leaves the
+    // rest air, so the seam is what proves the bit unpacking.
+    check("stone below", chunk::block_at(blocks, layers[0], 3, 7, 11) == 1);
+    check("air above", chunk::block_at(blocks, layers[0], 3, 8, 11) == 0);
+    check("upper section empty", chunk::block_at(blocks, layers[1], 0, 0, 0) == 0);
+    check("out of range", chunk::block_at(blocks, layers[0], 16, 0, 0) == -1);
+    check("bits for palette", chunk::bits_for(2) == 4 && chunk::bits_for(17) == 5 && chunk::bits_for(300) == 9);
+    check("layer by height", chunk::layer_of(layers, 5) == 0 && chunk::layer_of(layers, 20) == 1 && chunk::layer_of(layers, 200) == -1);
+}
+
+fn png_of(path: const u8[:], out: u8[>..]&) -> png::Image {
+    var file: u8[>..] = [];
+    if !read_file(path, file) { return png::Image { width: 0, height: 0, ok: false, error: [] }; }
+    png::decode(file, out)
+}
+
+fn test_png() {
+    var rgb: u8[>..] = [];
+    let a = png_of("test/data/png/rgb.png", rgb);
+    check("rgb decodes", a.ok && a.width == 4 && a.height == 2 && rgb.len == 4 * 2 * 4);
+    check("rgb first pixel", rgb[0] == 0 && rgb[1] == 128 && rgb[2] == 20 && rgb[3] == 255);
+    // Row one is stored with the Up filter, so these bytes only come out right
+    // if unfiltering ran.
+    check("rgb second row", rgb[16] == 1 && rgb[17] == 128 && rgb[18] == 120);
+    check("rgb last pixel", rgb[28] == 181 && rgb[29] == 98 && rgb[30] == 120);
+
+    var rgba: u8[>..] = [];
+    let b = png_of("test/data/png/rgba.png", rgba);
+    check("rgba decodes", b.ok && rgba.len == 2 * 2 * 4);
+    check("rgba alpha kept", rgba[3] == 255 && rgba[7] == 195);
+
+    var grey: u8[>..] = [];
+    let c = png_of("test/data/png/grey.png", grey);
+    check("grey decodes", c.ok && grey.len == 12);
+    check("grey spreads to rgb", grey[4] == 127 && grey[5] == 127 && grey[6] == 127 && grey[7] == 255);
+
+    var idx: u8[>..] = [];
+    let e = png_of("test/data/png/indexed.png", idx);
+    check("indexed decodes", e.ok && idx.len == 12);
+    check("palette applied", idx[0] == 255 && idx[1] == 0 && idx[2] == 0);
+    check("tRNS applied", idx[3] == 0 && idx[7] == 128 && idx[11] == 255);
+
+    var junk: u8[>..] = [];
+    let f = png::decode("not a png at all", junk);
+    check("junk refused", !f.ok && f.error.len > 0 && junk.len == 0);
+    var file: u8[>..] = [];
+    read_file("test/data/png/rgb.png", file);
+    var half: u8[>..] = [];
+    check("truncated png refused", !png::decode(file[..file.len / 2], half).ok);
+    check("paeth picks the nearest", png::paeth(10, 20, 15) == 15 && png::paeth(2, 3, 100) == 2);
+}
+
+fn test_saves() {
+    var all: saves::Save[>..] = [];
+    check("saves found", saves::scan("test/data", all) == 1);
+    check("folder name", all[0].folder == "testworld");
+    check("name from level.dat", all[0].name == "zoo test");
+    check("data version read", all[0].version == 3953);
+    check("find by name", saves::find(all, "zoo test") == 0 && saves::find(all, "nope") == -1);
+    check("no saves folder", saves::scan("test/data/png", all) == 0);
+    var tiles: saves::Tile[>..] = [];
+    check("region files listed", saves::tiles(all[0], tiles) == 2);
+    var seen_neg = false;
+    for t in tiles { if t.rx == -1 && t.rz == -1 { seen_neg = true; } }
+    check("negative region tile", seen_neg);
+    let rx, rz, ok = saves::parse_tile("r.-3.12.mca");
+    check("tile name parsed", ok && rx == -3 && rz == 12);
+    let _a, _b, bad = saves::parse_tile("r.5.mca");
+    check("tile name refused", !bad);
+}
+
+fn test_blockmodel() {
+    let res = "test/data/resources";
+    let stone = blockmodel::faces_of(res, "minecraft:stone");
+    check("stone resolved", stone.ok);
+    check("stone all faces", stone.side == "minecraft:block/stone" && stone.top == "minecraft:block/stone" && stone.bottom == "minecraft:block/stone");
+    let grass = blockmodel::faces_of(res, "minecraft:grass_block");
+    check("grass resolved", grass.ok);
+    check("grass top", grass.top == "block/grass_block_top");
+    check("grass side", grass.side == "block/grass_block_side");
+    check("grass bottom", grass.bottom == "block/dirt");
+    let log = blockmodel::faces_of(res, "oak_log");
+    check("log side", log.ok && log.side == "block/oak_log");
+    check("log end on top and bottom", log.top == "block/oak_log_top" && log.bottom == "block/oak_log_top");
+    let fence = blockmodel::faces_of(res, "oak_fence");
+    check("multipart first model", fence.ok && fence.side == "block/oak_planks");
+    check("unknown block", !blockmodel::faces_of(res, "minecraft:nether_portal").ok);
+    check("texture path", blockmodel::texture_path(res, "minecraft:block/stone") == "test/data/resources/textures/block/stone.png");
+}
+
+fn test_atlas() {
+    let res = "test/data/resources";
+    var slots: atlas::Slot[>..] = [];
+    var tiles: u8[>..] = [];
+    let stone = atlas::add(res, "block/stone", slots, tiles);
+    let dirt = atlas::add(res, "block/dirt", slots, tiles);
+    check("tiles numbered in order", stone == 0 && dirt == 1);
+    check("tile bytes appended", tiles.len == 2 * 16 * 16 * 4);
+    check("a name is added once", atlas::add(res, "block/stone", slots, tiles) == 0 && slots.len == 2);
+    check("missing texture refused", atlas::add(res, "block/nothing_here", slots, tiles) == -1);
+    let missing = atlas::add_missing(slots, tiles);
+    check("stand-in tile", missing == 2 && atlas::find(slots, "zoo:missing") == 2);
+    atlas::add(res, "block/grass_block_top", slots, tiles);
+    var image: u8[>..] = [];
+    let g = atlas::flatten(tiles, image);
+    check("grid is square enough", g.tiles == 4 && g.cols == 2 && g.rows == 2);
+    check("image size", g.width == 32 && g.height == 32 && image.len == 32 * 32 * 4);
+    // Row 0 holds the top row of tile 0 and then of tile 1, so the first pixel
+    // of each is where the two textures' light top rows meet.
+    check("first tile in place", image[0] == 165 && image[1] == 165 && image[2] == 165);
+    check("second tile beside it", image[64] == 174 && image[65] == 136 && image[66] == 107);
+    let u, v = atlas::corner_of(g, 3);
+    check("tile corner", u == 0.5 && v == 0.5);
+    let du, dv = atlas::step_of(g);
+    check("tile step", du == 0.5 && dv == 0.5);
+}
+
+fn test_mesh() {
+    let res = "test/data/resources";
+    var file: u8[>..] = [];
+    read_file("test/data/saves/testworld/region/r.0.0.mca", file);
+    var raw: u8[>..] = [];
+    region::chunk(file, 0, 0, raw);
+    var tags: nbt::Node[>..] = [];
+    nbt::read(raw, tags);
+    var layers: chunk::Layer[>..] = [];
+    var blocks: u16[>..] = [];
+    chunk::read(raw, tags, layers, blocks);
+
+    var slots: atlas::Slot[>..] = [];
+    var tiles: u8[>..] = [];
+    var known: mesh::Known[>..] = [];
+    var cells: mesh::Cell[>..] = [];
+    let vol = mesh::bake(raw, tags, layers, blocks, res, slots, tiles, known, cells);
+    check("volume spans both sections", vol.layers == 2 && vol.y0 == 0);
+    check("cells filled", cells.len == 2 * 4096);
+    check("stone cell solid", mesh::cell_at(cells, vol, 3, 7, 11).solid == 1);
+    check("air cell empty", mesh::cell_at(cells, vol, 3, 8, 11).solid == 0);
+    check("names cached once", known.len == 2);
+    check("air is not solid", mesh::air("minecraft:cave_air") && !mesh::air("minecraft:stone"));
+
+    var image: u8[>..] = [];
+    let g = atlas::flatten(tiles, image);
+    var verts: f32[>..] = [];
+    let faces = mesh::build(cells, vol, g, 0, 0, verts);
+    // The fixture is a slab eight blocks deep: its lid, its floor and four
+    // walls, and nothing from inside it.
+    check("only visible faces", faces == 256 + 256 + 4 * 16 * 8);
+    check("vertices per face", verts.len == faces * 6 * 6);
+    check("mesh sits in the chunk", verts[0] >= 0.0 && verts[0] <= 16.0 && verts[2] >= 0.0 && verts[2] <= 16.0);
+
+    var far: f32[>..] = [];
+    mesh::build(cells, vol, g, 2, -3, far);
+    check("chunk offset applied", far[0] == 32.0 && far[2] == -48.0);
+}
+
 fn main() {
     var label: u8[>..] = [];
     specimen::format_label(label, specimen::current(), platform::name());
@@ -100,6 +322,14 @@ fn main() {
     test_zip();
     test_meta();
     test_prepare();
+    test_nbt();
+    test_region();
+    test_chunk();
+    test_png();
+    test_saves();
+    test_blockmodel();
+    test_atlas();
+    test_mesh();
     test_download();
     if failures == 0 { print("all passed"); } else { print(failures, " failed"); }
     if failures > 0 { exit(1); }

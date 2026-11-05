@@ -14,6 +14,7 @@
 <p align="center">
   <a href="#download"><b>Download</b></a> ·
   <a href="#what-works-today"><b>What works today</b></a> ·
+  <a href="#the-client"><b>The client</b></a> ·
   <a href="#roadmap"><b>Roadmap</b></a> ·
   <a href="#build-from-source"><b>Build from source</b></a> ·
   <a href="#versioning-the-specimen-label"><b>Versioning</b></a> ·
@@ -24,7 +25,7 @@
 
 zoo is Minecraft: Java Edition rebuilt in [Goose](https://aardappel.github.io/goose/), a memory-safe systems language with no heap allocator and no garbage collector. It follows the path [Horizon](https://github.com/horizon-rust/horizon) took in Rust: a native game that reads the same worlds and plays by the same rules, started through a small launcher that prepares the game's files from your own copy of Minecraft.
 
-This repository holds both. The launcher works today. The zoo client is being built in stages, starting with a world viewer.
+This repository holds both. The launcher works today, and the client draws its first worlds.
 
 > Not an official Minecraft product. Not approved by or associated with Mojang or Microsoft. zoo contains no Minecraft code, assets or data: you need your own legally obtained copy of Minecraft: Java Edition.
 
@@ -46,14 +47,30 @@ Builds for Windows x64 and Linux x86-64 are attached to each [release](https://g
 - **Version list:** Mojang's version manifest, merged with the versions in your `.minecraft` folder. The list is cached, so it still fills offline.
 - **Preparation:** zoo takes the textures, models, block states, atlases, fonts and English names out of the client jar and stores them in its collection folder (`%APPDATA%\zoo` on Windows, `~/.local/share/zoo` on Linux, `~/Library/Application Support/zoo` on macOS). A prepared version is skipped on the next start until its jar changes.
 - **Written in Goose:** SHA-1, DEFLATE and zip reading are plain Goose, with no zlib or OpenSSL behind them. The only C is the network door (WinHTTP on Windows, libcurl elsewhere) and a platform probe.
+- **The client, first look:** `zoo-client` opens one of your singleplayer worlds and draws it. Anvil region files, NBT, the block palettes, the model chain down to the textures, and a free camera. See [The client](#the-client).
 - **A window that stays responsive:** downloads and unpacking run on a worker thread and report back through Goose's typed queues.
+
+## The client
+
+Prepare a version in the launcher first, then:
+
+```sh
+zoo-client --list                 # the worlds in your .minecraft
+zoo-client --world "My World"     # open one
+zoo-client --radius 6             # load more chunks around the start
+```
+
+Click into the window to take the mouse, Escape to give it back. `W A S D` moves, Space and Shift go up and down, Ctrl is faster.
+
+What it draws today is every full block as a cube, with the textures its model chain names. It reads the chunks around one point once, so the world does not grow as you fly, and chunk edges are drawn as if nothing stood beyond them. Water, leaves and the blocks that are not cubes are missing. Worlds from 1.16 on are read; older ones pack their block indices differently and are refused rather than drawn wrong.
 
 ## Roadmap
 
 | Stage | Goal | State |
 |---|---|---|
 | 1 | Launcher with a GUI: versions, download, checks, resource preparation | working |
-| 2 | Zoo client, first look: open a singleplayer world (Anvil, NBT) and render its chunks with the real textures, free camera | next |
+| 2 | Zoo client, first look: open a singleplayer world (Anvil, NBT) and render its chunks with the real textures, free camera | working |
+| 2b | Chunks loaded and dropped as you move, neighbour-aware meshing, water and leaves | next |
 | 3 | Playable: player physics and collision, breaking and placing blocks, saving, HUD | planned |
 | 4 | The long road, in Horizon's order: world generation, mobs, redstone, multiplayer protocol, comparison tests against vanilla | planned |
 | - | Microsoft account sign-in, several instances, a mod and pack browser | planned |
@@ -78,6 +95,7 @@ cmake -S goose -B goose/build -DCMAKE_BUILD_TYPE=Release -DGOOSE_BUILTIN_LIBS=al
 cmake --build goose/build --config Release
 
 goose build zoo.goose        # builds ./zoo-launcher
+goose build client.goose     # builds ./zoo-client
 goose tests.goose            # runs the tests
 ```
 
@@ -94,11 +112,15 @@ goose tests.goose
 
 ```
 zoo.goose              the launcher's entry point
+client.goose           the client's entry point
 zoo/app/               window, theme, version catalogue, worker thread
 zoo/collection.goose   finding, downloading, checking and preparing one version
 zoo/mojang/            Mojang's manifest and version files
 zoo/minecraft/         the official launcher's folder
-zoo/archive/           zip and DEFLATE
+zoo/world/             NBT, Anvil regions, chunk palettes, saves
+zoo/client/            block models, texture atlas, mesher, camera
+zoo/image/             PNG
+zoo/archive/           zip, DEFLATE, zlib and gzip
 zoo/hash/              SHA-1
 zoo/net/               HTTP, backed by native/
 zoo/specimen.goose     the release catalogue

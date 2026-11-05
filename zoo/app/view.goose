@@ -76,18 +76,49 @@ fn readiness(r: const catalogue::Row&, s: const State&) -> const u8[:], ui::Colo
     return "NOT PREPARED", theme::MUTED;
 }
 
-fn row_item(p: const kit::Pen&, y: f32, w: f32, n: const u8[:], title: const u8[:], detail: const u8[:],
-            detail_color: ui::Color, action: const u8[:], enabled: bool) -> bool {
-    kit::text(p, MARGIN, y + 23.0, n, p.fonts.mono, theme::FAINT);
-    kit::text(p, MARGIN + 56.0, y + 13.0, title, p.fonts.medium, theme::INK);
-    var d: u8[>..] = [];
-    kit::fit(d, detail, p.fonts.small, w - 2.0 * MARGIN - 260.0);
-    kit::text(p, MARGIN + 56.0, y + 36.0, d, p.fonts.small, detail_color);
-    var hit = false;
-    if action.len > 0 {
-        hit = kit::button(p, kit::r(w - MARGIN - 180.0, y + 18.0, 164.0, 30.0), action, kit::LINK, enabled);
+// Block heights of the skyline behind the title, in 16 px steps. Fixed
+// rather than random so every frame and every screenshot draws the same.
+let SKYLINE: i64[24] = [3, 5, 4, 8, 6, 6, 11, 9, 4, 7, 13, 10, 6, 5, 9, 12, 8, 4, 6, 10, 7, 5, 3, 4];
+let BLOCK: f32 = 16.0;
+
+fn draw_stage(p: const kit::Pen&, w: f32, bottom: f32) {
+    kit::glow(p, kit::r(w * 0.3, 0.0, w * 0.7, bottom), theme::GLOW);
+    let x0 = w * 0.5;
+    let cols = ((w - MARGIN - x0) / BLOCK) as i64;
+    var i = 0;
+    while i < cols {
+        let blocks = SKYLINE[i % SKYLINE.len];
+        let bh = blocks as f32 * BLOCK;
+        ui::fill_rect(p.ctx, kit::r(x0 + (i as f32) * BLOCK, bottom - bh, BLOCK, bh), 0.0, theme::SKYLINE);
+        i++;
     }
-    kit::line(p, MARGIN, w - MARGIN, y + 66.0);
+}
+
+// One card of the panel: a coloured band with the step number, then what
+// the step is about and the single thing the player can do there.
+struct Card {
+    n: const u8[:],
+    title: const u8[:],
+    detail: const u8[:],
+    detail_color: ui::Color,
+    band: ui::Color,
+    action: const u8[:],
+    enabled: bool,
+}
+
+fn draw_card(p: const kit::Pen&, box: ui::Rect, c: const Card&) -> bool {
+    ui::fill_rect(p.ctx, box, 12.0, theme::SURFACE);
+    let band = kit::r(box.x, box.y, box.w, 92.0);
+    ui::fill_rect(p.ctx, band, 12.0, c.band);
+    kit::text(p, box.x + 18.0, box.y + 8.0, c.n, p.fonts.title, theme::INK);
+    kit::text(p, box.x + 18.0, box.y + 108.0, c.title, p.fonts.medium, theme::INK);
+    var d: u8[>..] = [];
+    kit::fit(d, c.detail, p.fonts.small, box.w - 36.0);
+    kit::text(p, box.x + 18.0, box.y + 134.0, d, p.fonts.small, c.detail_color);
+    var hit = false;
+    if c.action.len > 0 {
+        hit = kit::button(p, kit::r(box.x + 18.0, box.y + box.h - 40.0, box.w - 36.0, 26.0), c.action, kit::LINK, c.enabled);
+    }
     hit
 }
 
@@ -95,57 +126,73 @@ fn draw_play(p: const kit::Pen&, s: State&, w: f32, h: f32) -> i64 {
     var want = WANT_NOTHING;
     let tag = specimen::current();
     let has = s.selected >= 0 && s.selected < s.rows.len;
+    let panel_h: f32 = 250.0;
+    let panel_y = max(452.0, h - 80.0 - panel_h);
+    draw_stage(p, w, panel_y - 28.0);
 
-    // Eyebrow, title and the specimen line.
+    // The name, with the sand dot of the mark where Gigacat puts its plus.
+    let zw = kit::text(p, MARGIN - 4.0, 84.0, "zoo", p.fonts.hero, theme::INK);
+    ui::fill_circle(p.ctx, kit::r(MARGIN + zw + 6.0, 124.0, 22.0, 22.0), theme::ACCENT);
+
+    // Facts about the chosen version as pills; the first one opens Versions.
     var x = MARGIN;
+    let vlabel = if has { str("Minecraft ", s.rows[s.selected].id) } else { str("Choose a version") };
+    let vw = kit::pill(p, x, 206.0, vlabel, theme::INK, true);
+    if kit::clicked(p, kit::r(x, 206.0, vw, 28.0)) { s.page = PAGE_VERSIONS; }
+    x += vw + 8.0;
     if has {
         let row = s.rows[s.selected];
         let word, color = readiness(row, s);
-        x += kit::text(p, x, 118.0, str("MINECRAFT ", upper(row.id)), p.fonts.mono, theme::MUTED);
-        x += kit::text(p, x + 10.0, 118.0, "·", p.fonts.mono, theme::FAINT) + 20.0;
-        kit::text(p, x, 118.0, word, p.fonts.mono, color);
-    } else {
-        kit::text(p, x, 118.0, "NO VERSION CHOSEN", p.fonts.mono, theme::MUTED);
+        x += kit::pill(p, x, 206.0, word, color, false) + 8.0;
+        x += kit::pill(p, x, 206.0, upper(row.kind), theme::MUTED, false) + 8.0;
     }
-    kit::text(p, MARGIN - 2.0, 104.0, "zoo", p.fonts.hero, theme::INK);
-    kit::text(p, MARGIN, 226.0, str(tag.scientific, " ", tag.authority), p.fonts.italic, theme::INK);
-    kit::text(p, MARGIN, 256.0, "Minecraft: Java Edition, rewritten in Goose. This launcher prepares the", p.fonts.body, theme::MUTED);
-    kit::text(p, MARGIN, 278.0, "resources the zoo client reads from your own copy of the game.", p.fonts.body, theme::MUTED);
+    kit::pill(p, x, 206.0, tag.scientific, theme::MUTED, false);
 
-    // The version pill and the main action.
-    let bw = 150.0;
-    let bx = w - MARGIN - bw;
+    kit::text(p, MARGIN, 254.0, "Minecraft: Java Edition, rewritten in Goose. This launcher prepares the", p.fonts.body, theme::MUTED);
+    kit::text(p, MARGIN, 276.0, "resources the zoo client reads from your own copy of the game.", p.fonts.body, theme::MUTED);
+
+    // The main action and, beside it, looking for the game again.
     let label = if !has { "Prepare" } else if s.busy { "Preparing..." }
                 else if s.rows[s.selected].ready { "Prepare again" } else { "Prepare" };
-    if kit::button(p, kit::r(bx, 316.0, bw, 42.0), label, kit::PRIMARY, has && !s.busy) { want = WANT_OBTAIN; }
-    let pill = if has { str(s.rows[s.selected].id, "    ") } else { str("Choose a version    ") };
-    let pw = kit::width(p.fonts.medium, pill) + 36.0;
-    let px = bx - pw - 10.0;
-    if kit::button(p, kit::r(px, 316.0, pw, 42.0), pill, kit::QUIET, true) { s.page = PAGE_VERSIONS; }
-    kit::chevron(p, px + pw - 28.0, 335.0);
+    let bw: f32 = 200.0;
+    if kit::play_button(p, kit::r(MARGIN, 318.0, bw, 48.0), label, has && !s.busy) { want = WANT_OBTAIN; }
+    if kit::refresh_button(p, kit::r(MARGIN + bw + 10.0, 318.0, 48.0, 48.0), !s.busy) { want = WANT_REFRESH; }
     if s.busy || s.stage == collection::STAGE_DONE {
         let part = if s.stage >= collection::STAGE_DONE { 5.0 } else { s.stage as f32 };
-        kit::progress(p, kit::r(bx - pw - 10.0, 368.0, pw + 10.0 + bw, 3.0), part, 5.0);
+        kit::progress(p, kit::r(MARGIN, 380.0, bw + 58.0, 3.0), part, 5.0);
     }
+    kit::line(p, MARGIN, w * 0.45, panel_y - 28.0);
 
-    // The numbered checklist.
-    var y: f32 = 392.0;
-    kit::line(p, MARGIN, w - MARGIN, y);
+    // The panel: what preparing needs, one card per step.
+    let panel = kit::r(MARGIN, panel_y, w - 2.0 * MARGIN, panel_h);
+    ui::fill_rect(p.ctx, panel, 16.0, theme::PANEL);
+    ui::stroke_rect(p.ctx, panel, 16.0, 1.0, theme::LINE);
+    let gap: f32 = 14.0;
+    let cw = (panel.w - 2.0 * gap - 2.0 * 16.0) / 3.0;
+    let ch = panel_h - 32.0;
+    let cy = panel_y + 16.0;
+
     let ready = has && s.rows[s.selected].ready;
     let res_text = if !has { str("Choose a version first.") }
                    else if ready { str("Prepared for Minecraft ", s.rows[s.selected].id) }
                    else { str("Not prepared yet for Minecraft ", s.rows[s.selected].id) };
-    if row_item(p, y, w, "01", "Resources", res_text, if ready { theme::LEAF } else { theme::MUTED },
-                if ready { "Prepare again" } else { "Prepare" }, has && !s.busy) { want = WANT_OBTAIN; }
-    y += 66.0;
+    let c1 = Card { n: "01", title: "Resources", detail: res_text,
+                    detail_color: if ready { theme::LEAF } else { theme::MUTED }, band: theme::BAND_SAND,
+                    action: if ready { "Prepare again" } else { "Prepare" }, enabled: has && !s.busy };
+    if draw_card(p, kit::r(MARGIN + 16.0, cy, cw, ch), c1) { want = WANT_OBTAIN; }
+
     let mc_text = if s.game_found { str("Found at ", s.game_dir) }
                   else { str("Not found at ", s.game_dir, ". zoo downloads the game from Mojang instead.") };
-    if row_item(p, y, w, "02", "Minecraft folder", mc_text, theme::MUTED, "Look again", !s.busy) { want = WANT_REFRESH; }
-    y += 66.0;
+    let c2 = Card { n: "02", title: "Minecraft folder", detail: mc_text, detail_color: theme::MUTED,
+                    band: theme::BAND_LEAF, action: "Look again", enabled: !s.busy };
+    if draw_card(p, kit::r(MARGIN + 16.0 + cw + gap, cy, cw, ch), c2) { want = WANT_REFRESH; }
+
     let status_color = if s.stage == collection::STAGE_FAILED { theme::RUST }
                        else if s.stage == collection::STAGE_DONE { theme::LEAF } else { theme::MUTED };
-    let status_text = if s.status.len > 0 { str(s.status) } else { str("Your collection is kept in ", s.home) };
-    row_item(p, y, w, "03", "Collection", status_text, status_color, "", false);
+    let status_text = if s.status.len > 0 { str(s.status) } else { str("Kept in ", s.home) };
+    let c3 = Card { n: "03", title: "Collection", detail: status_text, detail_color: status_color,
+                    band: theme::BAND_STONE, action: "", enabled: false };
+    draw_card(p, kit::r(MARGIN + 16.0 + 2.0 * (cw + gap), cy, cw, ch), c3);
     want
 }
 
@@ -215,8 +262,6 @@ fn draw(ctx: ui::Context, fonts: const theme::Fonts&, s: State&, w: f32, h: f32)
     var want = WANT_NOTHING;
     if ui::begin(ctx, "zoo", ui::rect(0.0, 0.0, w, h), ui::WINDOW_NO_SCROLLBAR) {
         let p = kit::Pen { ctx: ctx, fonts: fonts };
-        // The name, very large and nearly the ground's colour, under the play page.
-        if s.page == PAGE_PLAY { kit::text(p, MARGIN - 18.0, h - 300.0, "zoo", fonts.watermark, theme::WATERMARK); }
         draw_nav(p, s, w);
         if s.page == PAGE_PLAY { want = draw_play(p, s, w, h); }
         else if s.page == PAGE_VERSIONS { draw_versions(p, s, w, h); }

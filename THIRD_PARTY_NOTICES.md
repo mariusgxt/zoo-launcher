@@ -20,3 +20,13 @@ zoo contains no Minecraft code, assets or data. The launcher reads them from
 the player's own copy of Minecraft: Java Edition, or downloads that copy from
 Mojang's servers, and keeps them on the player's machine. Not an official
 Minecraft product. Not approved by or associated with Mojang or Microsoft.
+
+## Play page design
+
+The layout of the launcher's Play page (title with a mark beside it, fact
+pills, the main action with a refresh button, a skyline behind the title
+and a raised panel of cards) follows the "Gigacat prototype launcher"
+concept by ツMonkesha on the Figma Community
+(https://www.figma.com/community/file/1593718159027974699), licensed under
+CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/). zoo redraws it in
+code with its own colours, text and mark; no images from the file are used.

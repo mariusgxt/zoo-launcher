@@ -17,14 +17,21 @@ let ACCENT_HOVER = ui::Color { 238, 186, 102, 255 };
 let ON_ACCENT = ui::Color { 33, 22, 8, 255 };
 let LEAF = ui::Color { 140, 192, 132, 255 };
 let RUST = ui::Color { 224, 122, 95, 255 };
-let WATERMARK = ui::Color { 27, 25, 23, 255 };
+// The play page's stage, after the Gigacat launcher concept: a raised panel
+// for the cards, a warm glow behind the title and a blocky skyline in it.
+let PANEL = ui::Color { 24, 23, 21, 255 };
+let CHIP = ui::Color { 52, 42, 28, 255 };
+let GLOW = ui::Color { 226, 168, 74, 34 };
+let SKYLINE = ui::Color { 34, 31, 27, 255 };
+let BAND_SAND = ui::Color { 58, 45, 26, 255 };
+let BAND_LEAF = ui::Color { 34, 48, 34, 255 };
+let BAND_STONE = ui::Color { 40, 38, 35, 255 };
 let NONE = ui::Color { 0, 0, 0, 0 };
 
 let INTER: const u8[:] = embed_file("../../assets/fonts/Inter-Regular.otf");
 let INTER_MEDIUM: const u8[:] = embed_file("../../assets/fonts/Inter-Medium.otf");
 let INTER_ITALIC: const u8[:] = embed_file("../../assets/fonts/Inter-Italic.otf");
 let DISPLAY: const u8[:] = embed_file("../../assets/fonts/InterDisplay-SemiBold.otf");
-let DISPLAY_BOLD: const u8[:] = embed_file("../../assets/fonts/InterDisplay-Bold.otf");
 let MONO: const u8[:] = embed_file("../../assets/fonts/JetBrainsMono-Regular.ttf");
 
 struct Fonts {
@@ -36,7 +43,6 @@ struct Fonts {
     mono: ui::Font,
     title: ui::Font,
     hero: ui::Font,
-    watermark: ui::Font,
 }
 
 // One atlas for every size, baked once; the context draws its own widgets
@@ -52,7 +58,6 @@ fn load_fonts() -> Fonts, bool {
         mono: ui::add_font_from_memory(a, MONO, 13.0),
         title: ui::add_font_from_memory(a, DISPLAY, 60.0),
         hero: ui::add_font_from_memory(a, DISPLAY, 104.0),
-        watermark: ui::add_font_from_memory(a, DISPLAY_BOLD, 300.0),
     };
     let ok = ui::bake(a);
     return f, ok;

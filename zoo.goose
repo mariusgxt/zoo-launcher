@@ -184,6 +184,10 @@ fn main() {
         gfx::end_pass();
         ui::render(ctx);
         drawn++;
+        // The first frame is on screen now, so this is the moment the window
+        // is worth looking at. Explorer does not hand the foreground to a
+        // double-clicked program, which looked like zoo not starting at all.
+        if drawn == 1 { platform::raise_window(); }
         if drawn == opts.frames { break; }
     }
     if opts.frames > 0 { gfx::screenshot("zoo.png"); }

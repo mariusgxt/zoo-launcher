@@ -5,12 +5,23 @@ import os;
 namespace platform;
 
 extern fn zoo_platform() -> i32;
+extern fn zoo_local_minutes() -> i32;
+extern fn zoo_raise_window();
 
 let WINDOWS = 0;
 let LINUX = 1;
 let MACOS = 2;
 
 fn current() -> i32 { zoo_platform() }
+
+// Minutes since local midnight. The C side does the conversion, because
+// os::time is epoch seconds and Goose has no notion of the machine's zone.
+fn clock_minutes() -> i64 { zoo_local_minutes() as i64 }
+
+// Asks the system to put zoo's window in front. Call it once the window has
+// drawn, not before: a window with nothing in it yet can be raised and then
+// still show the desktop through it for a frame.
+fn raise_window() { zoo_raise_window(); }
 
 fn name() -> const u8[:] {
     match zoo_platform() as i64 { WINDOWS => "windows", MACOS => "macos", _ => "linux" }

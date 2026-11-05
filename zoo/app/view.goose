@@ -6,6 +6,7 @@ import os;
 import ui;
 import zoo.specimen;
 import zoo.collection;
+import zoo.app.palette;
 import zoo.app.theme;
 import zoo.app.kit;
 import zoo.app.catalogue;
@@ -18,6 +19,7 @@ let PAGE_ABOUT = 2;
 let WANT_NOTHING = 0;
 let WANT_OBTAIN = 1;
 let WANT_REFRESH = 2;
+let WANT_THEME = 3;      // State.theme_pick holds which
 
 struct Filters { releases: bool, snapshots: bool, installed_only: bool }
 
@@ -35,6 +37,7 @@ struct State {
     game_dir: const u8[:],
     game_found: bool,
     locality: const u8[:],
+    theme_pick: i64,
 }
 
 let MARGIN: f32 = 64.0;
@@ -177,7 +180,7 @@ fn draw_play(p: const kit::Pen&, s: State&, w: f32, h: f32) -> i64 {
                    else if ready { str("Prepared for Minecraft ", s.rows[s.selected].id) }
                    else { str("Not prepared yet for Minecraft ", s.rows[s.selected].id) };
     let c1 = Card { n: "01", title: "Resources", detail: res_text,
-                    detail_color: if ready { theme::LEAF } else { theme::MUTED }, band: theme::BAND_SAND,
+                    detail_color: if ready { theme::LEAF } else { theme::MUTED }, band: theme::BAND_ACCENT,
                     action: if ready { "Prepare again" } else { "Prepare" }, enabled: has && !s.busy };
     if draw_card(p, kit::r(MARGIN + 16.0, cy, cw, ch), c1) { want = WANT_OBTAIN; }
 
@@ -241,7 +244,8 @@ fn draw_versions(p: const kit::Pen&, s: State&, w: f32, h: f32) {
     if shown == 0 { kit::text(p, MARGIN + 18.0, top + 16.0, "Nothing matches these filters.", p.fonts.body, theme::MUTED); }
 }
 
-fn draw_about(p: const kit::Pen&, s: const State&, w: f32) {
+fn draw_about(p: const kit::Pen&, s: State&, w: f32) -> i64 {
+    var want = WANT_NOTHING;
     let t = specimen::current();
     kit::text(p, MARGIN, 112.0, "Specimen", p.fonts.title, theme::INK);
     kit::text(p, MARGIN, 192.0, str(t.scientific, " ", t.authority), p.fonts.italic, theme::INK);
@@ -255,7 +259,17 @@ fn draw_about(p: const kit::Pen&, s: const State&, w: f32) {
         y += 44.0;
         kit::line(p, MARGIN, w - MARGIN, y);
     }
+    kit::text(p, MARGIN, y + 20.0, "THEME", p.fonts.mono, theme::FAINT);
+    var cx = MARGIN + 200.0;
+    for t, i in palette::PALETTES {
+        let cw, hit = kit::chip(p, cx, y + 12.0, t.palette_name, i == theme::CURRENT);
+        if hit && i != theme::CURRENT { s.theme_pick = i; want = WANT_THEME; }
+        cx += cw + 8.0;
+    }
+    y += 52.0;
+    kit::line(p, MARGIN, w - MARGIN, y);
     kit::text(p, MARGIN, y + 24.0, "Not an official Minecraft product. Not approved by or associated with Mojang or Microsoft.", p.fonts.small, theme::FAINT);
+    want
 }
 
 fn draw(ctx: ui::Context, fonts: const theme::Fonts&, s: State&, w: f32, h: f32) -> i64 {
@@ -265,7 +279,7 @@ fn draw(ctx: ui::Context, fonts: const theme::Fonts&, s: State&, w: f32, h: f32)
         draw_nav(p, s, w);
         if s.page == PAGE_PLAY { want = draw_play(p, s, w, h); }
         else if s.page == PAGE_VERSIONS { draw_versions(p, s, w, h); }
-        else { draw_about(p, s, w); }
+        else { want = draw_about(p, s, w); }
         let t = specimen::current();
         kit::text(p, MARGIN, h - 34.0, str("LAUNCHER ", t.version, "  ·  ", upper(t.scientific)), fonts.mono, theme::FAINT);
         kit::text_right(p, w - MARGIN, h - 34.0, upper(s.locality), fonts.mono, theme::FAINT);

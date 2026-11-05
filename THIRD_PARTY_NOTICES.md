@@ -29,4 +29,5 @@ and a raised panel of cards) follows the "Gigacat prototype launcher"
 concept by ツMonkesha on the Figma Community
 (https://www.figma.com/community/file/1593718159027974699), licensed under
 CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/). zoo redraws it in
-code with its own colours, text and mark; no images from the file are used.
+code with its own text and mark; no images from the file are used. The
+"Amethyst" theme uses colours sampled from the same concept.

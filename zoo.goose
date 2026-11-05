@@ -88,7 +88,7 @@ fn main() {
     guard baked else { abort(str("ui: ", ui::error())); }
     let ctx = ui::create_context(fonts.body);
     guard ctx.id != 0 else { abort(str("ui: ", ui::error())); }
-    theme::apply(ctx);
+    theme::use_palette(ctx, theme::load_choice(home));
 
     let thread = thread_spawn(worker::run);
     let game_dir = platform::minecraft_dir();
@@ -102,6 +102,7 @@ fn main() {
         page: opts.page, scroll: 0.0,
         busy: false, stage: 0, status: [], list_note: [], home: home,
         game_dir: game_dir, game_found: is_dir(game_dir), locality: locality,
+        theme_pick: 0,
     };
     s.list_note.append("asking Mojang for the version list...");
     var drawn = 0;
@@ -152,6 +153,9 @@ fn main() {
             s.status.resize(0);
             s.status.append("starting");
             ask(worker::ASK_OBTAIN, home, catalogue::job_for(rows[s.selected]));
+        } else if want == view::WANT_THEME {
+            theme::use_palette(ctx, s.theme_pick);
+            theme::save_choice(home);
         } else if want == view::WANT_REFRESH {
             rescan(rows, home);
             s.game_found = is_dir(game_dir);
@@ -159,7 +163,7 @@ fn main() {
             ask(worker::ASK_MANIFEST, home, empty_job());
         }
 
-        gfx::begin_screen(float4 { 0.071, 0.067, 0.059, 1.0 });
+        gfx::begin_screen(float4 { theme::BG.r as f32 / 255.0, theme::BG.g as f32 / 255.0, theme::BG.b as f32 / 255.0, 1.0 });
         gfx::end_pass();
         ui::render(ctx);
         drawn++;

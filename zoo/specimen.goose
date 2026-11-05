@@ -14,13 +14,22 @@ struct Tag {
     preparator: const u8[:],
 }
 
-let CATALOGUE: Tag[1] = [
+let CATALOGUE: Tag[2] = [
     Tag {
         version: "0.1.0",
         scientific: "Panthera leo",
         common: "Lion",
         authority: "Linnaeus, 1758",
         accession: "ZOO-2026-0001",
+        collected: "2026-11-05",
+        preparator: "mariusgxt",
+    },
+    Tag {
+        version: "0.1.1",
+        scientific: "Giraffa camelopardalis",
+        common: "Giraffe",
+        authority: "Linnaeus, 1758",
+        accession: "ZOO-2026-0002",
         collected: "2026-11-05",
         preparator: "mariusgxt",
     },

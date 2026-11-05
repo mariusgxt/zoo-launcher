@@ -107,3 +107,59 @@ fn fit(out: u8[>..]&, s: const u8[:], font: ui::Font, max_w: f32) {
     out.append(s[..n]);
     out.append("...");
 }
+
+// A filled label pill for facts about the chosen version. `clickable`
+// adds the chevron and hover; the caller tests the click on the same box.
+fn pill(p: const Pen&, x: f32, y: f32, label: const u8[:], color: ui::Color, clickable: bool) -> f32 {
+    let font = p.fonts.small;
+    let extra = if clickable { 20.0 } else { 0.0 };
+    let w = width(font, label) + 26.0 + extra;
+    let box = r(x, y, w, 28.0);
+    let over = clickable && hovered(p, box);
+    ui::fill_rect(p.ctx, box, 14.0, if over { theme::SURFACE_HOVER } else { theme::CHIP });
+    text(p, x + 13.0, y + 6.0, label, font, color);
+    if clickable { chevron(p, x + w - 22.0, y + 12.0); }
+    w
+}
+
+// The play triangle, drawn rather than taken from a font so it sits on the
+// pixel grid at any size.
+fn play_glyph(p: const Pen&, x: f32, y: f32, size: f32, color: ui::Color) {
+    ui::fill_triangle(p.ctx, x, y, x, y + size, x + size * 0.86, y + size / 2.0, color);
+}
+
+// A circular arrow. The arc leaves a gap on the upper right where the
+// arrowhead goes; the head's points are precomputed for radius 8 to keep
+// trigonometry out of the frame loop.
+fn refresh_glyph(p: const Pen&, cx: f32, cy: f32, color: ui::Color) {
+    ui::stroke_arc(p.ctx, cx, cy, 8.0, 0.6, 5.6, 2.0, color);
+    ui::fill_triangle(p.ctx, cx + 9.4, cy - 7.7, cx + 3.0, cy - 2.4, cx + 8.7, cy - 1.9, color);
+}
+
+// A square button that carries only the refresh glyph.
+fn refresh_button(p: const Pen&, box: ui::Rect, enabled: bool) -> bool {
+    let over = enabled && hovered(p, box);
+    ui::fill_rect(p.ctx, box, 12.0, if over { theme::SURFACE_HOVER } else { theme::SURFACE });
+    refresh_glyph(p, box.x + box.w / 2.0, box.y + box.h / 2.0, if enabled { theme::INK } else { theme::FAINT });
+    enabled && clicked(p, box)
+}
+
+// The main action: the play glyph in front of the label.
+fn play_button(p: const Pen&, box: ui::Rect, label: const u8[:], enabled: bool) -> bool {
+    let over = enabled && hovered(p, box);
+    let bg = if !enabled { theme::SURFACE } else if over { theme::ACCENT_HOVER } else { theme::ACCENT };
+    let fg = if enabled { theme::ON_ACCENT } else { theme::FAINT };
+    ui::fill_rect(p.ctx, box, 12.0, bg);
+    let font = p.fonts.medium;
+    let w = width(font, label) + 22.0;
+    let x = box.x + (box.w - w) / 2.0;
+    play_glyph(p, x, box.y + box.h / 2.0 - 6.0, 12.0, fg);
+    text(p, x + 22.0, box.y + (box.h - height(font)) / 2.0 - 1.0, label, font, fg);
+    enabled && clicked(p, box)
+}
+
+// A soft light that fades to nothing at its left and bottom edges. Nuklear
+// only blends colours across a plain rectangle, so the fade is one quad.
+fn glow(p: const Pen&, box: ui::Rect, color: ui::Color) {
+    ui::fill_rect_multi_color(p.ctx, box, theme::NONE, color, theme::NONE, theme::NONE);
+}

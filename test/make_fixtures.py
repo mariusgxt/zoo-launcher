@@ -264,3 +264,58 @@ for name, (r_, g_, b_) in tints.items():
             px += [min(255, r_ + k), min(255, g_ + k), min(255, b_ + k), 255]
     open(f"{res}/textures/block/{name}.png", "wb").write(png(16, 16, 6, px))
 print("resource fixture written")
+
+
+# --- a demo world for the screenshots --------------------------------------
+# Rolling ground with a few trees, written with the same chunk writer as the
+# test world. Invented terrain and invented textures: nothing here comes from
+# Mojang, and the README's client screenshot is reproducible from this script.
+import math
+
+DEMO_PALETTE = ["minecraft:air", "minecraft:stone", "minecraft:dirt",
+                "minecraft:grass_block", "minecraft:oak_log"]
+
+
+def demo_height(wx, wz):
+    h = 8 + 3.0 * math.sin(wx / 9.0) + 2.5 * math.cos(wz / 7.0) + 1.5 * math.sin((wx + wz) / 13.0)
+    return max(2, min(15, int(h)))
+
+
+def demo_section(cx, cz):
+    idx = [0] * 4096
+    for z in range(16):
+        for x in range(16):
+            wx, wz = cx * 16 + x, cz * 16 + z
+            top = demo_height(wx, wz)
+            for y in range(top + 1):
+                idx[y * 256 + z * 16 + x] = 1 if y < top - 2 else (3 if y == top else 2)
+            # A trunk every so often, where the ground is flat enough for one.
+            if (wx * 7 + wz * 13) % 97 == 0 and top < 14:
+                for y in range(top + 1, min(16, top + 5)):
+                    idx[y * 256 + z * 16 + x] = 4
+    palette = nbt_list(10, [nbt_compound({"Name": (8, nbt_str(n))}) for n in DEMO_PALETTE])
+    block_states = nbt_compound({"palette": (9, palette), "data": (12, packed_longs(idx, 4))})
+    return nbt_compound({"Y": (1, struct.pack("b", 0)), "block_states": (10, block_states)})
+
+
+def demo_chunk(cx, cz):
+    return nbt_tag(10, "", nbt_compound({
+        "DataVersion": (3, struct.pack(">i", 3953)),
+        "xPos": (3, struct.pack(">i", cx)),
+        "zPos": (3, struct.pack(">i", cz)),
+        "yPos": (3, struct.pack(">i", 0)),
+        "Status": (8, nbt_str("minecraft:full")),
+        "sections": (9, nbt_list(10, [demo_section(cx, cz)])),
+    }))
+
+
+demo = f"{root}/saves/demo"
+os.makedirs(f"{demo}/region", exist_ok=True)
+demo_level = nbt_tag(10, "", nbt_compound({"Data": (10, nbt_compound({
+    "LevelName": (8, nbt_str("zoo demo")),
+    "DataVersion": (3, struct.pack(">i", 3953)),
+}))}))
+open(f"{demo}/level.dat", "wb").write(gzip.compress(demo_level))
+open(f"{demo}/region/r.0.0.mca", "wb").write(
+    region({(cx, cz): demo_chunk(cx, cz) for cx in range(6) for cz in range(6)}))
+print("demo world written")

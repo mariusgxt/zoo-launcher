@@ -52,12 +52,19 @@ Builds for Windows x64 and Linux x86-64 are attached to each [release](https://g
 
 ## The client
 
+<p align="center">
+  <img src="docs/media/client.png" alt="The zoo client drawing a world: terrain, trunks and a free camera" width="100%">
+</p>
+
+<sub>Drawn from the demo world in <code>test/data/saves/demo</code> with the stand-in textures of <code>test/data/resources</code>, both written by <code>test/make_fixtures.py</code>, so the picture holds no Minecraft content. With your own prepared version it uses the real textures.</sub>
+
 Prepare a version in the launcher first, then:
 
 ```sh
 zoo-client --list                 # the worlds in your .minecraft
 zoo-client --world "My World"     # open one
 zoo-client --radius 6             # load more chunks around the start
+zoo-client --check                # the folders zoo uses, and whether they work
 ```
 
 Click into the window to take the mouse, Escape to give it back. `W A S D` moves, Space and Shift go up and down, Ctrl is faster.

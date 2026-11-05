@@ -1,10 +1,18 @@
 # Third-party notices
 
-## Roboto
+## Inter
 
-`assets/fonts/Roboto-Regular.ttf` is Roboto by Christian Robertson, under the
-Apache License 2.0 (https://www.apache.org/licenses/LICENSE-2.0). It is
-embedded into the launcher at compile time.
+`assets/fonts/Inter-*.otf` and `assets/fonts/InterDisplay-*.otf` are Inter,
+Copyright 2016-2023 The Inter Project Authors, under the SIL Open Font
+License 1.1 (`assets/fonts/OFL.txt`).
+
+## JetBrains Mono
+
+`assets/fonts/JetBrainsMono-Regular.ttf` is JetBrains Mono, Copyright 2020
+The JetBrains Mono Project Authors, under the SIL Open Font License 1.1
+(`assets/fonts/OFL.txt`).
+
+All fonts are embedded into the launcher at compile time.
 
 ## Minecraft
 

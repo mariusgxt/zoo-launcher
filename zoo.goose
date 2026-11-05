@@ -4,6 +4,7 @@
 //   zoo-launcher --version     prints the specimen label
 //   zoo-launcher --frames N    draws N frames and saves zoo.png (for CI)
 //   zoo-launcher --select ID [--prepare]   picks a version, and prepares it
+//   zoo-launcher --page versions|about     opens on another page
 import std;
 import os;
 import gfx;
@@ -15,19 +16,23 @@ import zoo.minecraft.installs;
 import zoo.app.worker;
 import zoo.app.catalogue;
 import zoo.app.theme;
+import zoo.app.kit;
 import zoo.app.view;
 
-let ROBOTO: const u8[:] = embed_file("assets/fonts/Roboto-Regular.ttf");
-
-struct Options { frames: i64, version: bool, select: u8[..48], prepare: bool }
+struct Options { frames: i64, version: bool, select: u8[..48], prepare: bool, page: i64 }
 
 fn read_options() -> Options {
-    var o = Options { frames: -1, version: false, select: [], prepare: false };
+    var o = Options { frames: -1, version: false, select: [], prepare: false, page: view::PAGE_PLAY };
     let argv = args();
     var i = 1;
     while i < argv.len {
         if argv[i] == "--version" { o.version = true; }
         else if argv[i] == "--prepare" { o.prepare = true; }
+        else if argv[i] == "--page" && i + 1 < argv.len {
+            if argv[i + 1] == "versions" { o.page = view::PAGE_VERSIONS; }
+            else if argv[i + 1] == "about" { o.page = view::PAGE_ABOUT; }
+            i++;
+        }
         else if argv[i] == "--select" && i + 1 < argv.len {
             o.select.append(argv[i + 1][..min(argv[i + 1].len, 48)]);
             i++;
@@ -76,14 +81,17 @@ fn main() {
     let home = platform::data_dir();
     guard platform::make_dirs(home) else { abort(str("cannot make ", home)); }
 
-    guard gfx::open(specimen::short_label(specimen::current()), 960, 600, gfx::WINDOW_RESIZABLE) else {
+    guard gfx::open(specimen::short_label(specimen::current()), 1280, 800, gfx::WINDOW_RESIZABLE) else {
         abort(str("gfx: ", gfx::error()));
     }
-    let ctx = ui::create_from_memory(ROBOTO, 16.0);
+    let fonts, baked = theme::load_fonts();
+    guard baked else { abort(str("ui: ", ui::error())); }
+    let ctx = ui::create_context(fonts.body);
     guard ctx.id != 0 else { abort(str("ui: ", ui::error())); }
     theme::apply(ctx);
 
     let thread = thread_spawn(worker::run);
+    let game_dir = platform::minecraft_dir();
     var rows: catalogue::Row[>..] = [];
     rescan(rows, home);
     ask(worker::ASK_MANIFEST, home, empty_job());
@@ -91,7 +99,9 @@ fn main() {
     var s = view::State {
         rows: rows, selected: -1,
         filters: view::Filters { releases: true, snapshots: false, installed_only: false },
-        busy: false, stage: 0, status: [], list_note: [], home: home, locality: locality,
+        page: opts.page, scroll: 0.0,
+        busy: false, stage: 0, status: [], list_note: [], home: home,
+        game_dir: game_dir, game_found: is_dir(game_dir), locality: locality,
     };
     s.list_note.append("asking Mojang for the version list...");
     var drawn = 0;
@@ -135,7 +145,7 @@ fn main() {
 
         ui::input_from_gfx(ctx);
         let size = gfx::screen_size();
-        let want = view::draw(ctx, s, size.x, size.y);
+        let want = view::draw(ctx, fonts, s, size.x, size.y);
         if want == view::WANT_OBTAIN && s.selected >= 0 {
             s.busy = true;
             s.stage = collection::STAGE_LOOKUP;
@@ -144,11 +154,12 @@ fn main() {
             ask(worker::ASK_OBTAIN, home, catalogue::job_for(rows[s.selected]));
         } else if want == view::WANT_REFRESH {
             rescan(rows, home);
+            s.game_found = is_dir(game_dir);
             listing = true;
             ask(worker::ASK_MANIFEST, home, empty_job());
         }
 
-        gfx::begin_screen(float4 { 0.118, 0.106, 0.090, 1.0 });
+        gfx::begin_screen(float4 { 0.071, 0.067, 0.059, 1.0 });
         gfx::end_pass();
         ui::render(ctx);
         drawn++;
@@ -158,5 +169,6 @@ fn main() {
     ask(worker::ASK_QUIT, home, empty_job());
     thread_wait(thread);
     ui::destroy(ctx);
+    ui::destroy(fonts.atlas);
     gfx::close();
 }

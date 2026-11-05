@@ -1,8 +1,8 @@
 // Same native parts as zoo.build, for the test runner.
 c_include = ["native"];
-c_sources_linux = ["native/http_curl.c", "native/platform_posix.c"];
+c_sources_linux = ["native/http_curl.c", "native/platform_posix.c", "native/dialog_posix.c"];
 c_libs_linux = ["curl"];
-c_sources_macos = ["native/http_curl.c", "native/platform_posix.c"];
+c_sources_macos = ["native/http_curl.c", "native/platform_posix.c", "native/dialog_posix.c"];
 c_libs_macos = ["curl"];
-c_sources_windows = ["native/http_winhttp.c", "native/platform_win.c"];
-c_libs_windows = ["winhttp"];
+c_sources_windows = ["native/http_winhttp.c", "native/platform_win.c", "native/dialog_win.c"];
+c_libs_windows = ["winhttp", "user32"];

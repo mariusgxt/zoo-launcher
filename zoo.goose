@@ -2,6 +2,7 @@
 // needs a real C compiler, so the in-process run is not enough here).
 //   zoo-launcher               opens the window
 //   zoo-launcher --version     prints the specimen label
+//   zoo-launcher --check       prints the folders it uses and whether they work
 //   zoo-launcher --frames N    draws N frames and saves zoo.png (for CI)
 //   zoo-launcher --select ID [--prepare]   picks a version, and prepares it
 //   zoo-launcher --page versions|about     opens on another page
@@ -11,6 +12,8 @@ import gfx;
 import ui;
 import zoo.platform;
 import zoo.specimen;
+import zoo.diagnose;
+import zoo.fatal;
 import zoo.collection;
 import zoo.minecraft.installs;
 import zoo.app.worker;
@@ -19,14 +22,15 @@ import zoo.app.theme;
 import zoo.app.kit;
 import zoo.app.view;
 
-struct Options { frames: i64, version: bool, select: u8[..48], prepare: bool, page: i64 }
+struct Options { frames: i64, version: bool, check: bool, select: u8[..48], prepare: bool, page: i64 }
 
 fn read_options() -> Options {
-    var o = Options { frames: -1, version: false, select: [], prepare: false, page: view::PAGE_PLAY };
+    var o = Options { frames: -1, version: false, check: false, select: [], prepare: false, page: view::PAGE_PLAY };
     let argv = args();
     var i = 1;
     while i < argv.len {
         if argv[i] == "--version" { o.version = true; }
+        else if argv[i] == "--check" { o.check = true; }
         else if argv[i] == "--prepare" { o.prepare = true; }
         else if argv[i] == "--page" && i + 1 < argv.len {
             if argv[i + 1] == "versions" { o.page = view::PAGE_VERSIONS; }
@@ -78,6 +82,12 @@ fn main() {
         write_stdout(label);
         return;
     }
+    if opts.check {
+        var text: u8[>..] = [];
+        diagnose::report(text);
+        write_stdout(text);
+        return;
+    }
     let home = platform::data_dir();
     // A data folder that cannot be made is shown in the window rather than
     // aborted on: someone who started the launcher by double-clicking it
@@ -85,12 +95,12 @@ fn main() {
     let home_ok = platform::make_dirs(home);
 
     guard gfx::open(specimen::short_label(specimen::current()), 1280, 800, gfx::WINDOW_RESIZABLE) else {
-        abort(str("gfx: ", gfx::error()));
+        fatal::stop(str("The window could not be opened.\n", gfx::error()));
     }
     let fonts, baked = theme::load_fonts();
-    guard baked else { abort(str("ui: ", ui::error())); }
+    guard baked else { fatal::stop(str("The fonts could not be prepared.\n", ui::error())); }
     let ctx = ui::create_context(fonts.body);
-    guard ctx.id != 0 else { abort(str("ui: ", ui::error())); }
+    guard ctx.id != 0 else { fatal::stop(str("The interface could not be set up.\n", ui::error())); }
     theme::use_palette(ctx, theme::load_choice(home));
 
     let thread = thread_spawn(worker::run);

@@ -10,12 +10,15 @@
 //   zoo-client --radius N             chunks to load around the start
 //   zoo-client --frames N             draws N frames, saves zoo-client.png
 //   zoo-client --list                 lists the worlds it can find
+//   zoo-client --check                prints the folders it uses and whether they work
 import std;
 import os;
 import vec;
 import gfx;
 import zoo.platform;
 import zoo.specimen;
+import zoo.diagnose;
+import zoo.fatal;
 import zoo.world.nbt;
 import zoo.world.region;
 import zoo.world.chunk;
@@ -34,6 +37,7 @@ struct Options {
     frames: i64,
     list: bool,
     version: bool,
+    check: bool,
     at_x: f32,
     at_y: f32,
     at_z: f32,
@@ -53,13 +57,14 @@ fn read_number(s: const u8[:]) -> f32 {
 fn read_options() -> Options {
     var o = Options {
         world: [], saves_dir: [], resources: [], radius: DEFAULT_RADIUS, frames: -1,
-        list: false, version: false, at_x: 0.0, at_y: 0.0, at_z: 0.0, placed: false,
+        list: false, version: false, check: false, at_x: 0.0, at_y: 0.0, at_z: 0.0, placed: false,
     };
     let argv = args();
     var i = 1;
     while i < argv.len {
         let flag = argv[i];
         if flag == "--list" { o.list = true; i++; }
+        else if flag == "--check" { o.check = true; i++; }
         else if flag == "--version" { o.version = true; i++; }
         else if flag == "--at" && i + 3 < argv.len {
             o.at_x = read_number(argv[i + 1]);
@@ -207,6 +212,12 @@ fn main() {
         return;
     }
 
+    if o.check {
+        var text: u8[>..] = [];
+        diagnose::report(text);
+        write_stdout(text);
+        return;
+    }
     var saves_dir: u8[..400] = [];
     if o.saves_dir.len > 0 { saves_dir.append(o.saves_dir); } else { saves_dir.append(platform::minecraft_dir()[..min(platform::minecraft_dir().len, 400)]); }
     var all: saves::Save[>..] = [];
@@ -262,8 +273,7 @@ fn main() {
     var image: u8[>..] = [];
     let grid = atlas::flatten(tiles, image);
     guard gfx::open("zoo", 1280, 800, gfx::WINDOW_RESIZABLE) else {
-        write_stderr(str("gfx: ", gfx::error(), "\n"));
-        exit(1);
+        fatal::stop(str("The window could not be opened.\n", gfx::error()));
     }
     let texture = gfx::texture2d(grid.width, grid.height);
     gfx::update_texture(texture, image);
@@ -272,8 +282,7 @@ fn main() {
                              gfx::PipelineDesc { cull: gfx::CULL_BACK, depth_test: true, depth_write: true });
     let buffer = gfx::vertex_buffer(bytes_of(verts));
     if pipe.id == 0 || buffer.id == 0 || texture.id == 0 {
-        write_stderr(str("renderer: ", gfx::error(), "\n"));
-        exit(1);
+        fatal::stop(str("The renderer could not be set up.\n", gfx::error()));
     }
     let vertices = loaded.floats / 6;
     var grabbed = false;

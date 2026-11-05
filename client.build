@@ -1,6 +1,7 @@
 // The client needs the platform probe for the folder layout, but no network.
 c_include = ["native"];
-c_sources_linux = ["native/platform_posix.c"];
-c_sources_macos = ["native/platform_posix.c"];
-c_sources_windows = ["native/platform_win.c"];
+c_sources_linux = ["native/platform_posix.c", "native/dialog_posix.c"];
+c_sources_macos = ["native/platform_posix.c", "native/dialog_posix.c"];
+c_sources_windows = ["native/platform_win.c", "native/dialog_win.c"];
+c_libs_windows = ["user32"];
 output = "zoo-client";

@@ -17,10 +17,12 @@ namespace play;
 struct Card {
     band: ui::Color,
     tag: const u8[:],
+    num: const u8[:],          // large on the band, where the concept has art
     title: const u8[:],
     detail: const u8[:],
     detail_color: ui::Color,
     action: const u8[:],
+    foot: const u8[:],         // shown when there is nothing to click
     enabled: bool,
 }
 
@@ -32,6 +34,8 @@ fn draw_card(p: const kit::Pen&, box: ui::Rect, c: const Card&) -> bool {
     let tw = kit::width(p.fonts.tiny, c.tag) + 20.0;
     ui::fill_rect(p.ctx, kit::r(box.x + 12.0, box.y + 12.0, tw, 20.0), 10.0, theme::BG);
     kit::text(p, box.x + 22.0, box.y + 16.0, c.tag, p.fonts.tiny, theme::INK);
+    // The band carried nothing but the tag and read as a blank stripe.
+    kit::text_right(p, box.x + box.w - 18.0, box.y + band_h - 54.0, c.num, p.fonts.heading, theme::BG);
 
     kit::text(p, box.x + 16.0, box.y + band_h + 12.0, c.title, p.fonts.medium, theme::INK);
     var d: u8[>..] = [];
@@ -41,6 +45,8 @@ fn draw_card(p: const kit::Pen&, box: ui::Rect, c: const Card&) -> bool {
     if c.action.len > 0 {
         hit = kit::button(p, kit::r(box.x + 16.0, box.y + box.h - 32.0, box.w - 32.0, 22.0),
                           c.action, kit::LINK, c.enabled);
+    } else if c.foot.len > 0 {
+        kit::text_right(p, box.x + box.w - 16.0, box.y + box.h - 30.0, c.foot, p.fonts.tiny, theme::FAINT);
     }
     hit
 }
@@ -76,6 +82,19 @@ fn draw_action_bar(p: const kit::Pen&, s: state::State&, box: ui::Rect) -> i64 {
     want
 }
 
+// The panel beside the action bar: two numbers and where they are kept.
+fn draw_side(p: const kit::Pen&, s: const state::State&, box: ui::Rect) {
+    ui::fill_rect(p.ctx, box, 18.0, theme::PANEL);
+    ui::stroke_rect(p.ctx, box, 18.0, 1.0, theme::LINE);
+    let ready = state::prepared_count(s);
+    kit::text(p, box.x + 20.0, box.y + 14.0, "PREPARED", p.fonts.tiny, theme::FAINT);
+    let nw = kit::text(p, box.x + 20.0, box.y + 30.0, str(ready), p.fonts.heading, theme::INK);
+    kit::text(p, box.x + 26.0 + nw, box.y + 48.0, str("of ", s.rows.len, " listed"), p.fonts.small, theme::MUTED);
+    var home: u8[>..] = [];
+    kit::fit(home, s.home, p.fonts.tiny, box.w - 40.0);
+    kit::text_right(p, box.x + box.w - 20.0, box.y + box.h - 26.0, home, p.fonts.tiny, theme::FAINT);
+}
+
 fn draw(p: const kit::Pen&, s: state::State&, w: f32, h: f32) -> i64 {
     var want = state::WANT_NOTHING;
     let tag = specimen::current();
@@ -104,6 +123,10 @@ fn draw(p: const kit::Pen&, s: state::State&, w: f32, h: f32) -> i64 {
 
     let bar = kit::r(x, state::TOP_H + 290.0, min(680.0, right - x), 76.0);
     want = draw_action_bar(p, s, bar);
+    // The concept puts its friends list beside the play button. zoo has no
+    // accounts, so the space carries the two counts the page is about.
+    let side = kit::r(bar.x + bar.w + 16.0, bar.y, right - bar.x - bar.w - 16.0, bar.h);
+    if side.w > 180.0 { draw_side(p, s, side); }
     if s.busy || s.stage == collection::STAGE_DONE {
         let part = if s.stage >= collection::STAGE_DONE { 5.0 } else { s.stage as f32 };
         kit::progress(p, kit::r(bar.x + 10.0, bar.y + bar.h + 10.0, bar.w - 20.0, 4.0), part, 5.0);
@@ -119,22 +142,28 @@ fn draw(p: const kit::Pen&, s: state::State&, w: f32, h: f32) -> i64 {
     let res_text = if !has { str("Choose a version first.") }
                    else if ready { str("Prepared for Minecraft ", s.rows[s.selected].id) }
                    else { str("Not prepared yet for Minecraft ", s.rows[s.selected].id) };
-    let c1 = Card { band: theme::BAND_ACCENT, tag: "STEP 01", title: "Resources", detail: res_text,
+    let c1 = Card { band: theme::BAND_ACCENT, tag: "STEP 01", num: "01", title: "Resources", detail: res_text,
                     detail_color: if ready { theme::LEAF } else { theme::MUTED },
-                    action: if ready { "Prepare again" } else { "Prepare" }, enabled: has && !s.busy };
+                    action: if ready { "Prepare again" } else { "Prepare" }, foot: "",
+                    enabled: has && !s.busy };
     if draw_card(p, kit::r(x, strip_y, cw, strip_h), c1) { want = state::WANT_OBTAIN; }
 
     let mc_text = if s.game_found { str("Found at ", s.game_dir) }
                   else { str("Not found. zoo downloads the game from Mojang instead.") };
-    let c2 = Card { band: theme::BAND_LEAF, tag: "STEP 02", title: "Minecraft folder", detail: mc_text,
-                    detail_color: theme::MUTED, action: "Look again", enabled: !s.busy };
+    let c2 = Card { band: theme::BAND_LEAF, tag: "STEP 02", num: "02", title: "Minecraft folder",
+                    detail: mc_text, detail_color: theme::MUTED, action: "Look again", foot: "",
+                    enabled: !s.busy };
     if draw_card(p, kit::r(x + cw + gap, strip_y, cw, strip_h), c2) { want = state::WANT_REFRESH; }
 
     let status_color = if s.stage == collection::STAGE_FAILED { theme::RUST }
                        else if s.stage == collection::STAGE_DONE { theme::LEAF } else { theme::MUTED };
     let status_text = if s.status.len > 0 { str(s.status) } else { str("Kept in ", s.home) };
-    let c3 = Card { band: theme::BAND_STONE, tag: "STEP 03", title: "Collection", detail: status_text,
-                    detail_color: status_color, action: "", enabled: false };
+    let stage_word = if s.busy { "working" }
+                     else if s.stage == collection::STAGE_FAILED { "stopped" }
+                     else if s.stage == collection::STAGE_DONE { "complete" } else { "idle" };
+    let c3 = Card { band: theme::BAND_STONE, tag: "STEP 03", num: "03", title: "Collection",
+                    detail: status_text, detail_color: status_color, action: "", foot: stage_word,
+                    enabled: false };
     draw_card(p, kit::r(x + 2.0 * (cw + gap), strip_y, cw, strip_h), c3);
     want
 }

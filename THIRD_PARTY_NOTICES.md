@@ -21,13 +21,26 @@ the player's own copy of Minecraft: Java Edition, or downloads that copy from
 Mojang's servers, and keeps them on the player's machine. Not an official
 Minecraft product. Not approved by or associated with Mojang or Microsoft.
 
-## Play page design
+## Launcher design
 
-The layout of the launcher's Play page (title with a mark beside it, fact
-pills, the main action with a refresh button, a skyline behind the title
-and a raised panel of cards) follows the "Gigacat prototype launcher"
-concept by ツMonkesha on the Figma Community
-(https://www.figma.com/community/file/1593718159027974699), licensed under
-CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/). zoo redraws it in
-code with its own text and mark; no images from the file are used. The
-"Amethyst" theme uses colours sampled from the same concept.
+The launcher's layout follows three published launcher concepts. zoo redraws
+everything in code, with its own colours, text and mark; no images, fonts or
+files from any of them are used.
+
+- **Gigacat prototype launcher** by ツMonkesha, Figma Community
+  (https://www.figma.com/community/file/1593718159027974699), licensed under
+  CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/). The frame comes
+  from this one: the rail of icons down the left, the top bar with its clock,
+  badge and bar, the wordmark over a lit ground, the pills under it, and the
+  row of cards along the foot. The "Amethyst" theme uses colours sampled from
+  it. The content, worlds, setup and label pages follow its mods, map,
+  settings and account pages.
+- **Minecraft Java Edition Launcher** by voidmax, Figma Community
+  (https://www.figma.com/community/file/1622169498397413530), licensed under
+  CC BY 4.0. The action bar that holds the version picker, the main button
+  and the icon buttons together on one panel is from this one, as is the
+  small state pill above the title.
+- **HQLauncher**, a Figma community design
+  (https://www.figma.com/design/A1ON5O3moAjptWHjsvQeGW). Its plainer table
+  rules for long lists and its swatch row for choosing an accent colour
+  shaped zoo's version list and theme picker.

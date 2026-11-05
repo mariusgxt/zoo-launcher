@@ -5,7 +5,7 @@
 //   zoo-launcher --check       prints the folders it uses and whether they work
 //   zoo-launcher --frames N    draws N frames and saves zoo.png (for CI)
 //   zoo-launcher --select ID [--prepare]   picks a version, and prepares it
-//   zoo-launcher --page versions|about     opens on another page
+//   zoo-launcher --page versions|content|worlds|setup|label   another page
 import std;
 import os;
 import gfx;
@@ -16,16 +16,19 @@ import zoo.diagnose;
 import zoo.fatal;
 import zoo.collection;
 import zoo.minecraft.installs;
+import zoo.minecraft.content;
+import zoo.world.saves;
 import zoo.app.worker;
 import zoo.app.catalogue;
 import zoo.app.theme;
 import zoo.app.kit;
+import zoo.app.state;
 import zoo.app.view;
 
 struct Options { frames: i64, version: bool, check: bool, select: u8[..48], prepare: bool, page: i64 }
 
 fn read_options() -> Options {
-    var o = Options { frames: -1, version: false, check: false, select: [], prepare: false, page: view::PAGE_PLAY };
+    var o = Options { frames: -1, version: false, check: false, select: [], prepare: false, page: state::PAGE_PLAY };
     let argv = args();
     var i = 1;
     while i < argv.len {
@@ -33,8 +36,11 @@ fn read_options() -> Options {
         else if argv[i] == "--check" { o.check = true; }
         else if argv[i] == "--prepare" { o.prepare = true; }
         else if argv[i] == "--page" && i + 1 < argv.len {
-            if argv[i + 1] == "versions" { o.page = view::PAGE_VERSIONS; }
-            else if argv[i + 1] == "about" { o.page = view::PAGE_ABOUT; }
+            if argv[i + 1] == "versions" { o.page = state::PAGE_VERSIONS; }
+            else if argv[i + 1] == "content" { o.page = state::PAGE_CONTENT; }
+            else if argv[i + 1] == "worlds" { o.page = state::PAGE_WORLDS; }
+            else if argv[i + 1] == "setup" { o.page = state::PAGE_SETTINGS; }
+            else if argv[i + 1] == "label" { o.page = state::PAGE_SPECIMEN; }
             i++;
         }
         else if argv[i] == "--select" && i + 1 < argv.len {
@@ -68,8 +74,17 @@ fn rescan(rows: catalogue::Row[>..]&, home: const u8[:]) {
     catalogue::refresh_ready(rows, home);
 }
 
-fn first_visible(rows: const catalogue::Row[:], f: const view::Filters&) -> i64 {
-    for r, i in rows { if view::visible(r, f) { return i; } }
+// The content kinds in the order the page's tabs list them.
+fn shelf_kind(shelf: i64) -> i64 {
+    match shelf {
+        0 => content::KIND_MODS,
+        1 => content::KIND_SHADERS,
+        _ => content::KIND_PACKS,
+    }
+}
+
+fn first_visible(rows: const catalogue::Row[:], f: const state::Filters&) -> i64 {
+    for r, i in rows { if state::visible(r, f) { return i; } }
     -1
 }
 
@@ -112,14 +127,19 @@ fn main() {
     rescan(rows, home);
     ask(worker::ASK_MANIFEST, home, empty_job());
 
-    var s = view::State {
+    var s = state::State {
         rows: rows, selected: -1,
-        filters: view::Filters { releases: true, snapshots: false, installed_only: false },
-        page: opts.page, scroll: 0.0,
+        filters: state::Filters { releases: true, snapshots: false, installed_only: false },
+        page: opts.page, scroll: 0.0, shelf: state::SHELF_MODS,
         busy: false, stage: 0, status: [], list_note: [], home: home,
         game_dir: game_dir, game_found: is_dir(game_dir), locality: locality,
-        theme_pick: 0,
+        theme_pick: 0, minutes: platform::clock_minutes(),
     };
+    var items: content::Item[>..] = [];
+    content::scan(game_dir, content::KIND_MODS, items);
+    var found: saves::Save[>..] = [];
+    saves::scan(game_dir, found);
+    var shelf_shown = state::SHELF_MODS;
     s.list_note.append("asking Mojang for the version list...");
     if !home_ok {
         s.stage = collection::STAGE_FAILED;
@@ -166,22 +186,36 @@ fn main() {
 
         ui::input_from_gfx(ctx);
         let size = gfx::screen_size();
-        let want = view::draw(ctx, fonts, s, size.x, size.y);
-        if want == view::WANT_OBTAIN && s.selected >= 0 {
+        let want = view::draw(ctx, fonts, s, items, found, size.x, size.y);
+        if want == state::WANT_OBTAIN && s.selected >= 0 {
             s.busy = true;
             s.stage = collection::STAGE_LOOKUP;
             s.status.resize(0);
             s.status.append("starting");
             ask(worker::ASK_OBTAIN, home, catalogue::job_for(rows[s.selected]));
-        } else if want == view::WANT_THEME {
+        } else if want == state::WANT_THEME {
             theme::use_palette(ctx, s.theme_pick);
             theme::save_choice(home);
-        } else if want == view::WANT_REFRESH {
+        } else if want == state::WANT_REFRESH {
             rescan(rows, home);
             s.game_found = is_dir(game_dir);
+            items.resize(0);
+            content::scan(game_dir, shelf_kind(s.shelf), items);
+            found.resize(0);
+            saves::scan(game_dir, found);
             listing = true;
             ask(worker::ASK_MANIFEST, home, empty_job());
+        } else if want == state::WANT_QUIT {
+            gfx::quit();
         }
+        // The content page reads one folder at a time, so a switch of its
+        // tabs is a rescan rather than three lists kept in step.
+        if s.shelf != shelf_shown {
+            shelf_shown = s.shelf;
+            items.resize(0);
+            content::scan(game_dir, shelf_kind(shelf_shown), items);
+        }
+        s.minutes = platform::clock_minutes();
 
         gfx::begin_screen(float4 { theme::BG.r / 255.0, theme::BG.g / 255.0, theme::BG.b / 255.0, 1.0 });
         gfx::end_pass();

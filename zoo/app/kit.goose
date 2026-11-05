@@ -163,3 +163,148 @@ fn play_button(p: const Pen&, box: ui::Rect, label: const u8[:], enabled: bool) 
 fn glow(p: const Pen&, box: ui::Rect, color: ui::Color) {
     ui::fill_rect_multi_color(p.ctx, box, theme::NONE, color, theme::NONE, theme::NONE);
 }
+
+// The icons of the rail. Each is drawn from rectangles and triangles in a
+// 22 x 22 box: a font would need a glyph set zoo does not ship, and these
+// stay sharp at the one size they are used in.
+let GLYPH_PLAY = 0;
+let GLYPH_VERSIONS = 1;
+let GLYPH_CONTENT = 2;
+let GLYPH_WORLDS = 3;
+let GLYPH_SETUP = 4;
+let GLYPH_LABEL = 5;
+let GLYPH_QUIT = 6;
+
+fn glyph_for(page: i64) -> i64 {
+    match page {
+        0 => GLYPH_PLAY,
+        1 => GLYPH_VERSIONS,
+        2 => GLYPH_CONTENT,
+        3 => GLYPH_WORLDS,
+        4 => GLYPH_SETUP,
+        _ => GLYPH_LABEL,
+    }
+}
+
+fn glyph(p: const Pen&, cx: f32, cy: f32, kind: i64, color: ui::Color) {
+    let s: f32 = 9.0;       // half the icon's box
+    if kind == GLYPH_PLAY {
+        ui::fill_triangle(p.ctx, cx - s + 3.0, cy - s, cx - s + 3.0, cy + s, cx + s, cy, color);
+    } else if kind == GLYPH_VERSIONS {
+        var i = 0;
+        while i < 3 {
+            let y = cy - s + 2.0 + i * 7.0;
+            ui::fill_rect(p.ctx, r(cx - s, y, 4.0, 4.0), 1.0, color);
+            ui::fill_rect(p.ctx, r(cx - s + 7.0, y + 1.0, s + 7.0, 2.0), 1.0, color);
+            i++;
+        }
+    } else if kind == GLYPH_CONTENT {
+        // A cube, seen from a corner: the top face and two sides.
+        ui::fill_triangle(p.ctx, cx, cy - s, cx + s, cy - s / 2.0, cx, cy, color);
+        ui::fill_triangle(p.ctx, cx, cy - s, cx - s, cy - s / 2.0, cx, cy, color);
+        ui::fill_triangle(p.ctx, cx - s, cy - s / 2.0, cx, cy, cx, cy + s, color);
+        ui::fill_triangle(p.ctx, cx - s, cy - s / 2.0, cx - s, cy + s / 2.0, cx, cy + s, color);
+    } else if kind == GLYPH_WORLDS {
+        // A folded map: three panels, the middle one dropped.
+        ui::fill_triangle(p.ctx, cx - s, cy - s + 2.0, cx - s / 3.0, cy - s + 5.0, cx - s / 3.0, cy + s, color);
+        ui::fill_triangle(p.ctx, cx - s, cy - s + 2.0, cx - s, cy + s - 3.0, cx - s / 3.0, cy + s, color);
+        ui::fill_rect(p.ctx, r(cx - s / 3.0 + 1.0, cy - s + 5.0, s / 1.5, 2.0 * s - 5.0), 1.0, color);
+        ui::fill_triangle(p.ctx, cx + s / 3.0 + 2.0, cy - s + 5.0, cx + s, cy - s + 2.0, cx + s, cy + s - 3.0, color);
+    } else if kind == GLYPH_SETUP {
+        ui::stroke_circle(p.ctx, r(cx - s + 2.0, cy - s + 2.0, 2.0 * s - 4.0, 2.0 * s - 4.0), 2.0, color);
+        ui::fill_circle(p.ctx, r(cx - 2.5, cy - 2.5, 5.0, 5.0), color);
+        var i = 0;
+        while i < 4 {
+            let dx = if i == 0 { -s } else if i == 1 { s - 3.0 } else { -1.5 };
+            let dy = if i == 2 { -s } else if i == 3 { s - 3.0 } else { -1.5 };
+            ui::fill_rect(p.ctx, r(cx + dx, cy + dy, 3.0, 3.0), 1.0, color);
+            i++;
+        }
+    } else if kind == GLYPH_LABEL {
+        // A museum tag: a rectangle with a corner cut and a hole for string.
+        ui::fill_rect(p.ctx, r(cx - s, cy - s / 1.6, 2.0 * s - 4.0, 1.3 * s), 2.0, color);
+        ui::fill_triangle(p.ctx, cx + s - 4.0, cy - s / 1.6, cx + s, cy, cx + s - 4.0, cy + s / 1.6, color);
+    } else {
+        // Leaving: a door's arrow, pointing out to the left.
+        ui::fill_rect(p.ctx, r(cx - s + 2.0, cy - 1.5, 2.0 * s - 5.0, 3.0), 1.0, color);
+        ui::fill_triangle(p.ctx, cx - s - 1.0, cy, cx - s + 5.0, cy - 5.0, cx - s + 5.0, cy + 5.0, color);
+    }
+}
+
+// One item of the rail: the icon with its name under it, and the active one
+// lit the way the concept lights the page you are on.
+fn rail_item(p: const Pen&, box: ui::Rect, label: const u8[:], kind: i64, active: bool) -> bool {
+    let over = hovered(p, box);
+    if active {
+        ui::fill_rect(p.ctx, box, 16.0, theme::CHIP);
+        ui::fill_rect(p.ctx, r(box.x - 6.0, box.y + 14.0, 3.0, box.h - 28.0), 1.5, theme::ACCENT);
+    } else if over {
+        ui::fill_rect(p.ctx, box, 16.0, theme::SURFACE_HOVER);
+    }
+    let color = if active { theme::ACCENT } else if over { theme::INK } else { theme::FAINT };
+    glyph(p, box.x + box.w / 2.0, box.y + 20.0, kind, color);
+    let lw = width(p.fonts.tiny, label);
+    text(p, box.x + (box.w - lw) / 2.0, box.y + 38.0, label, p.fonts.tiny,
+         if active { theme::INK } else { theme::FAINT });
+    clicked(p, box)
+}
+
+// zoo's mark: the specimen dot in a rounded tile, where the concept has its
+// cat. Drawn, not an image file, so the tile scales with the window.
+fn mark(p: const Pen&, tile: ui::Rect) {
+    let cx = tile.x + tile.w / 2.0;
+    let cy = tile.y + tile.h / 2.0;
+    ui::fill_circle(p.ctx, r(cx - 11.0, cy - 11.0, 22.0, 22.0), theme::ACCENT);
+    ui::fill_circle(p.ctx, r(cx - 4.0, cy - 14.0, 8.0, 8.0), theme::SURFACE);
+    ui::fill_circle(p.ctx, r(cx + 2.0, cy - 2.0, 5.0, 5.0), theme::BG);
+}
+
+// The diamond badge of the top bar: a big number over a small one.
+fn badge(p: const Pen&, cx: f32, cy: f32, radius: f32, big: const u8[:], small: const u8[:]) {
+    ui::fill_polygon(p.ctx, [float2 { cx, cy - radius }, float2 { cx + radius, cy },
+                             float2 { cx, cy + radius }, float2 { cx - radius, cy }], theme::SURFACE);
+    let bw = width(p.fonts.medium, big);
+    let sw = width(p.fonts.tiny, small);
+    text(p, cx - (bw + sw) / 2.0, cy - 9.0, big, p.fonts.medium, theme::INK);
+    text(p, cx - (bw + sw) / 2.0 + bw + 1.0, cy - 2.0, small, p.fonts.tiny, theme::FAINT);
+}
+
+// An outlined pill, as the concept's facts under the title are drawn.
+fn outline_pill(p: const Pen&, x: f32, y: f32, label: const u8[:], color: ui::Color) -> f32 {
+    let font = p.fonts.small;
+    let w = width(font, label) + 34.0;
+    let box = r(x, y, w, 32.0);
+    ui::fill_rect(p.ctx, box, 16.0, theme::CHIP);
+    ui::stroke_rect(p.ctx, box, 16.0, 1.0, theme::LINE);
+    text(p, x + 17.0, y + 8.0, label, font, color);
+    w
+}
+
+// The toggle of the content lists: a track with a knob, green when on.
+fn toggle(p: const Pen&, x: f32, y: f32, on: bool) -> bool {
+    let box = r(x, y, 46.0, 26.0);
+    let over = hovered(p, box);
+    ui::fill_rect(p.ctx, box, 13.0, if on { theme::LEAF } else if over { theme::SURFACE_HOVER } else { theme::SURFACE });
+    let knob_x = if on { x + 46.0 - 23.0 } else { x + 3.0 };
+    ui::fill_circle(p.ctx, r(knob_x, y + 3.0, 20.0, 20.0), theme::INK);
+    clicked(p, box)
+}
+
+// A square button carrying one rail glyph, for the action bar.
+fn icon_button(p: const Pen&, box: ui::Rect, kind: i64) -> bool {
+    let over = hovered(p, box);
+    ui::fill_rect(p.ctx, box, 12.0, if over { theme::SURFACE_HOVER } else { theme::SURFACE });
+    glyph(p, box.x + box.w / 2.0, box.y + box.h / 2.0, kind, if over { theme::INK } else { theme::MUTED });
+    clicked(p, box)
+}
+
+// The small state pill above the title: a dot in the state's colour and the
+// word beside it, as the Zenith concept marks its season.
+fn state_pill(p: const Pen&, x: f32, y: f32, label: const u8[:], color: ui::Color) -> f32 {
+    let font = p.fonts.tiny;
+    let w = width(font, label) + 38.0;
+    ui::fill_rect(p.ctx, r(x, y, w, 24.0), 12.0, theme::CHIP);
+    ui::fill_circle(p.ctx, r(x + 13.0, y + 9.0, 7.0, 7.0), color);
+    text(p, x + 26.0, y + 7.0, label, font, theme::INK);
+    w
+}

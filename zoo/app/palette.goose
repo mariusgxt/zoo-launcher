@@ -76,4 +76,6 @@ let AMETHYST = Palette {
     band_stone: ui::Color { 38, 36, 46, 255 },
 };
 
-let PALETTES: Palette[2] = [SAND, AMETHYST];
+// Amethyst first: it is the look the launcher was drawn for, and a fresh
+// install should show that one.
+let PALETTES: Palette[2] = [AMETHYST, SAND];

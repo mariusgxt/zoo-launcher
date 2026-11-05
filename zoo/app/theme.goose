@@ -8,25 +8,25 @@ namespace theme;
 
 // The roles are variables, filled from a palette.Palette, so a theme switch
 // reaches every view without passing the palette through each call.
-var BG = palette::SAND.bg;
-var SURFACE = palette::SAND.surface;
-var SURFACE_HOVER = palette::SAND.surface_hover;
-var LINE = palette::SAND.line;
-var INK = palette::SAND.ink;
-var MUTED = palette::SAND.muted;
-var FAINT = palette::SAND.faint;
-var ACCENT = palette::SAND.accent;
-var ACCENT_HOVER = palette::SAND.accent_hover;
-var ON_ACCENT = palette::SAND.on_accent;
-var LEAF = palette::SAND.leaf;
-var RUST = palette::SAND.rust;
-var PANEL = palette::SAND.panel;
-var CHIP = palette::SAND.chip;
-var GLOW = palette::SAND.glow;
-var SKYLINE = palette::SAND.skyline;
-var BAND_ACCENT = palette::SAND.band_accent;
-var BAND_LEAF = palette::SAND.band_leaf;
-var BAND_STONE = palette::SAND.band_stone;
+var BG = palette::AMETHYST.bg;
+var SURFACE = palette::AMETHYST.surface;
+var SURFACE_HOVER = palette::AMETHYST.surface_hover;
+var LINE = palette::AMETHYST.line;
+var INK = palette::AMETHYST.ink;
+var MUTED = palette::AMETHYST.muted;
+var FAINT = palette::AMETHYST.faint;
+var ACCENT = palette::AMETHYST.accent;
+var ACCENT_HOVER = palette::AMETHYST.accent_hover;
+var ON_ACCENT = palette::AMETHYST.on_accent;
+var LEAF = palette::AMETHYST.leaf;
+var RUST = palette::AMETHYST.rust;
+var PANEL = palette::AMETHYST.panel;
+var CHIP = palette::AMETHYST.chip;
+var GLOW = palette::AMETHYST.glow;
+var SKYLINE = palette::AMETHYST.skyline;
+var BAND_ACCENT = palette::AMETHYST.band_accent;
+var BAND_LEAF = palette::AMETHYST.band_leaf;
+var BAND_STONE = palette::AMETHYST.band_stone;
 var CURRENT: i64 = 0;
 let NONE = ui::Color { 0, 0, 0, 0 };
 
@@ -43,6 +43,8 @@ struct Fonts {
     small: ui::Font,
     italic: ui::Font,
     mono: ui::Font,
+    tiny: ui::Font,
+    heading: ui::Font,
     title: ui::Font,
     hero: ui::Font,
 }
@@ -58,6 +60,8 @@ fn load_fonts() -> Fonts, bool {
         small: ui::add_font_from_memory(a, INTER, 13.0),
         italic: ui::add_font_from_memory(a, INTER_ITALIC, 16.0),
         mono: ui::add_font_from_memory(a, MONO, 13.0),
+        tiny: ui::add_font_from_memory(a, MONO, 10.0),
+        heading: ui::add_font_from_memory(a, DISPLAY, 42.0),
         title: ui::add_font_from_memory(a, DISPLAY, 60.0),
         hero: ui::add_font_from_memory(a, DISPLAY, 104.0),
     };

@@ -17,6 +17,7 @@ import zoo.world.region;
 import zoo.world.chunk;
 import zoo.image.png;
 import zoo.world.saves;
+import zoo.client.blockmodel;
 
 var failures = 0;
 
@@ -226,6 +227,25 @@ fn test_saves() {
     check("tile name refused", !bad);
 }
 
+fn test_blockmodel() {
+    let res = "test/data/resources";
+    let stone = blockmodel::faces_of(res, "minecraft:stone");
+    check("stone resolved", stone.ok);
+    check("stone all faces", stone.side == "minecraft:block/stone" && stone.top == "minecraft:block/stone" && stone.bottom == "minecraft:block/stone");
+    let grass = blockmodel::faces_of(res, "minecraft:grass_block");
+    check("grass resolved", grass.ok);
+    check("grass top", grass.top == "block/grass_block_top");
+    check("grass side", grass.side == "block/grass_block_side");
+    check("grass bottom", grass.bottom == "block/dirt");
+    let log = blockmodel::faces_of(res, "oak_log");
+    check("log side", log.ok && log.side == "block/oak_log");
+    check("log end on top and bottom", log.top == "block/oak_log_top" && log.bottom == "block/oak_log_top");
+    let fence = blockmodel::faces_of(res, "oak_fence");
+    check("multipart first model", fence.ok && fence.side == "block/oak_planks");
+    check("unknown block", !blockmodel::faces_of(res, "minecraft:nether_portal").ok);
+    check("texture path", blockmodel::texture_path(res, "minecraft:block/stone") == "test/data/resources/textures/block/stone.png");
+}
+
 fn main() {
     var label: u8[>..] = [];
     specimen::format_label(label, specimen::current(), platform::name());
@@ -239,6 +259,7 @@ fn main() {
     test_chunk();
     test_png();
     test_saves();
+    test_blockmodel();
     test_download();
     if failures == 0 { print("all passed"); } else { print(failures, " failed"); }
     if failures > 0 { exit(1); }

@@ -1,0 +1,1 @@
+{"multipart": [{"apply": {"model": "minecraft:block/oak_fence_post"}}, {"when": {"north": "true"}, "apply": {"model": "minecraft:block/oak_fence_side", "uvlock": true}}]}

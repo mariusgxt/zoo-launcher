@@ -214,3 +214,53 @@ open(f"{pdir}/grey.png", "wb").write(png(3, 1, 0, [0, 127, 255]))
 open(f"{pdir}/indexed.png", "wb").write(
     png(3, 1, 3, [0, 1, 2], palette=[255, 0, 0, 0, 255, 0, 0, 0, 255], trns=[0, 128]))
 print("png fixtures written")
+
+
+# --- a stand-in resources folder -------------------------------------------
+# Shaped like what prepare.goose writes out of a client jar, with the model
+# chains Mojang uses (cube_all, cube_column) so the resolver is tested on the
+# real inheritance, but with textures invented here.
+res = f"{root}/resources"
+for sub in ("blockstates", "models/block", "textures/block"):
+    os.makedirs(f"{res}/{sub}", exist_ok=True)
+
+
+def model(path, obj):
+    open(f"{res}/{path}", "w").write(json.dumps(obj))
+
+
+model("blockstates/stone.json", {"variants": {"": {"model": "minecraft:block/stone"}}})
+model("blockstates/grass_block.json", {"variants": {
+    "snowy=false": [{"model": "minecraft:block/grass_block", "weight": 1}],
+    "snowy=true": {"model": "minecraft:block/grass_block_snow"}}})
+model("blockstates/oak_log.json", {"variants": {"axis=y": {"model": "minecraft:block/oak_log"}}})
+model("blockstates/oak_fence.json", {"multipart": [
+    {"apply": {"model": "minecraft:block/oak_fence_post"}},
+    {"when": {"north": "true"}, "apply": {"model": "minecraft:block/oak_fence_side", "uvlock": True}}]})
+model("models/block/block.json", {"gui_light": "side"})
+model("models/block/cube.json", {"parent": "block/block"})
+model("models/block/cube_all.json", {"parent": "block/cube", "textures": {
+    "particle": "#all", "down": "#all", "up": "#all", "north": "#all"}})
+model("models/block/cube_column.json", {"parent": "block/cube", "textures": {"particle": "#side"}})
+model("models/block/stone.json", {"parent": "minecraft:block/cube_all",
+                                  "textures": {"all": "minecraft:block/stone"}})
+model("models/block/grass_block.json", {"parent": "block/block", "textures": {
+    "particle": "block/dirt", "bottom": "block/dirt",
+    "top": "block/grass_block_top", "side": "block/grass_block_side"}})
+model("models/block/oak_log.json", {"parent": "block/cube_column", "textures": {
+    "end": "block/oak_log_top", "side": "block/oak_log"}})
+model("models/block/oak_fence_post.json", {"parent": "block/block", "textures": {"texture": "block/oak_planks"}})
+
+# 16x16 textures, each a flat colour with a lighter top row so a wrong tile in
+# the atlas shows up at a glance.
+tints = {"stone": (125, 125, 125), "dirt": (134, 96, 67), "grass_block_top": (105, 150, 70),
+         "grass_block_side": (120, 110, 80), "oak_log": (150, 120, 70),
+         "oak_log_top": (176, 143, 86), "oak_planks": (162, 130, 78)}
+for name, (r_, g_, b_) in tints.items():
+    px = []
+    for y in range(16):
+        for x in range(16):
+            k = 40 if y == 0 else 0
+            px += [min(255, r_ + k), min(255, g_ + k), min(255, b_ + k), 255]
+    open(f"{res}/textures/block/{name}.png", "wb").write(png(16, 16, 6, px))
+print("resource fixture written")

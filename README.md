@@ -28,9 +28,12 @@ This repository holds both. The launcher works today. The zoo client is being bu
 
 > Not an official Minecraft product. Not approved by or associated with Mojang or Microsoft. zoo contains no Minecraft code, assets or data: you need your own legally obtained copy of Minecraft: Java Edition.
 
-<p align="center">
-  <img src="docs/media/launcher.png" alt="The zoo launcher: the version list on the left, the selected version and its preparation on the right" width="80%">
-</p>
+<table>
+  <tr>
+    <td width="50%"><img src="docs/media/launcher.png" alt="The launcher's Play page: the chosen version, its state and Prepare"></td>
+    <td width="50%"><img src="docs/media/launcher-versions.png" alt="The launcher's Versions page: releases and snapshots with their state"></td>
+  </tr>
+</table>
 
 ## Download
 

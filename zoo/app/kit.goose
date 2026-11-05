@@ -132,8 +132,8 @@ fn play_glyph(p: const Pen&, x: f32, y: f32, size: f32, color: ui::Color) {
 // arrowhead goes; the head's points are precomputed for radius 8 to keep
 // trigonometry out of the frame loop.
 fn refresh_glyph(p: const Pen&, cx: f32, cy: f32, color: ui::Color) {
-    ui::stroke_arc(p.ctx, cx, cy, 8.0, 0.6, 5.6, 2.0, color);
-    ui::fill_triangle(p.ctx, cx + 9.4, cy - 7.7, cx + 3.0, cy - 2.4, cx + 8.7, cy - 1.9, color);
+    ui::stroke_arc(p.ctx, cx, cy, 8.0, 0.6, 5.6, 2.5, color);
+    ui::fill_triangle(p.ctx, cx + 11.0, cy - 9.0, cx + 1.5, cy - 3.5, cx + 9.5, cy + 0.5, color);
 }
 
 // A square button that carries only the refresh glyph.
@@ -199,11 +199,14 @@ fn glyph(p: const Pen&, cx: f32, cy: f32, kind: i64, color: ui::Color) {
             i++;
         }
     } else if kind == GLYPH_CONTENT {
-        // A cube, seen from a corner: the top face and two sides.
-        ui::fill_triangle(p.ctx, cx, cy - s, cx + s, cy - s / 2.0, cx, cy, color);
-        ui::fill_triangle(p.ctx, cx, cy - s, cx - s, cy - s / 2.0, cx, cy, color);
-        ui::fill_triangle(p.ctx, cx - s, cy - s / 2.0, cx, cy, cx, cy + s, color);
-        ui::fill_triangle(p.ctx, cx - s, cy - s / 2.0, cx - s, cy + s / 2.0, cx, cy + s, color);
+        // Three stacked slabs. The cube drawn here before lost its edges at
+        // this size and read as a smudge, because nothing separates the faces.
+        var i = 0;
+        while i < 3 {
+            let y = cy - s + 1.0 + i * 6.5;
+            ui::fill_rect(p.ctx, r(cx - s + 1.0, y, 2.0 * s - 2.0, 4.5), 1.0, color);
+            i++;
+        }
     } else if kind == GLYPH_WORLDS {
         // A folded map: three panels, the middle one dropped.
         ui::fill_triangle(p.ctx, cx - s, cy - s + 2.0, cx - s / 3.0, cy - s + 5.0, cx - s / 3.0, cy + s, color);
@@ -211,13 +214,14 @@ fn glyph(p: const Pen&, cx: f32, cy: f32, kind: i64, color: ui::Color) {
         ui::fill_rect(p.ctx, r(cx - s / 3.0 + 1.0, cy - s + 5.0, s / 1.5, 2.0 * s - 5.0), 1.0, color);
         ui::fill_triangle(p.ctx, cx + s / 3.0 + 2.0, cy - s + 5.0, cx + s, cy - s + 2.0, cx + s, cy + s - 3.0, color);
     } else if kind == GLYPH_SETUP {
-        ui::stroke_circle(p.ctx, r(cx - s + 2.0, cy - s + 2.0, 2.0 * s - 4.0, 2.0 * s - 4.0), 2.0, color);
-        ui::fill_circle(p.ctx, r(cx - 2.5, cy - 2.5, 5.0, 5.0), color);
+        // Three sliders. The cogwheel's teeth were single pixels at this
+        // size and vanished, leaving a ring nobody could name.
         var i = 0;
-        while i < 4 {
-            let dx = if i == 0 { -s } else if i == 1 { s - 3.0 } else { -1.5 };
-            let dy = if i == 2 { -s } else if i == 3 { s - 3.0 } else { -1.5 };
-            ui::fill_rect(p.ctx, r(cx + dx, cy + dy, 3.0, 3.0), 1.0, color);
+        while i < 3 {
+            let y = cy - s + 2.0 + i * 6.5;
+            ui::fill_rect(p.ctx, r(cx - s + 1.0, y + 1.0, 2.0 * s - 2.0, 2.0), 1.0, color);
+            let knob = if i == 1 { cx + s - 7.0 } else { cx - s + 3.0 };
+            ui::fill_rect(p.ctx, r(knob, y - 1.0, 4.0, 6.0), 1.0, color);
             i++;
         }
     } else if kind == GLYPH_LABEL {
@@ -260,13 +264,18 @@ fn mark(p: const Pen&, tile: ui::Rect) {
 }
 
 // The diamond badge of the top bar: a big number over a small one.
-fn badge(p: const Pen&, cx: f32, cy: f32, radius: f32, big: const u8[:], small: const u8[:]) {
-    ui::fill_polygon(p.ctx, [float2 { cx, cy - radius }, float2 { cx + radius, cy },
-                             float2 { cx, cy + radius }, float2 { cx - radius, cy }], theme::SURFACE);
+// The diamond narrows away from its middle, so the radius has to clear the
+// text plus the height the text sits off centre; "0/922" would otherwise
+// run out through the right-hand corner.
+fn badge(p: const Pen&, cx: f32, cy: f32, radius: f32, big: const u8[:], small: const u8[:]) -> f32 {
     let bw = width(p.fonts.medium, big);
     let sw = width(p.fonts.tiny, small);
+    let rad = max(radius, (bw + sw) / 2.0 + 24.0);
+    ui::fill_polygon(p.ctx, [float2 { cx, cy - rad }, float2 { cx + rad, cy },
+                             float2 { cx, cy + rad }, float2 { cx - rad, cy }], theme::SURFACE);
     text(p, cx - (bw + sw) / 2.0, cy - 9.0, big, p.fonts.medium, theme::INK);
     text(p, cx - (bw + sw) / 2.0 + bw + 1.0, cy - 2.0, small, p.fonts.tiny, theme::FAINT);
+    rad
 }
 
 // An outlined pill, as the concept's facts under the title are drawn.
@@ -288,6 +297,20 @@ fn toggle(p: const Pen&, x: f32, y: f32, on: bool) -> bool {
     let knob_x = if on { x + 46.0 - 23.0 } else { x + 3.0 };
     ui::fill_circle(p.ctx, r(knob_x, y + 3.0, 20.0, 20.0), theme::INK);
     clicked(p, box)
+}
+
+// What a list page shows when it has nothing to list. Framed, because two
+// loose lines of grey text in the middle of a panel read as a page that
+// failed to load rather than as a folder that is empty.
+fn empty_note(p: const Pen&, box: ui::Rect, title: const u8[:], where_it_looks: const u8[:]) {
+    ui::fill_rect(p.ctx, box, 16.0, theme::SURFACE);
+    ui::stroke_rect(p.ctx, box, 16.0, 1.0, theme::LINE);
+    let cy = box.y + box.h / 2.0;
+    glyph(p, box.x + 44.0, cy, GLYPH_LABEL, theme::FAINT);
+    text(p, box.x + 76.0, cy - 20.0, title, p.fonts.medium, theme::INK);
+    var line: u8[>..] = [];
+    fit(line, where_it_looks, p.fonts.small, box.w - 110.0);
+    text(p, box.x + 76.0, cy + 4.0, line, p.fonts.small, theme::FAINT);
 }
 
 // A square button carrying one rail glyph, for the action bar.

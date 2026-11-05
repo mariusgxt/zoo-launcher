@@ -79,7 +79,10 @@ fn main() {
         return;
     }
     let home = platform::data_dir();
-    guard platform::make_dirs(home) else { abort(str("cannot make ", home)); }
+    // A data folder that cannot be made is shown in the window rather than
+    // aborted on: someone who started the launcher by double-clicking it
+    // sees no console, so an abort here looks like nothing happening.
+    let home_ok = platform::make_dirs(home);
 
     guard gfx::open(specimen::short_label(specimen::current()), 1280, 800, gfx::WINDOW_RESIZABLE) else {
         abort(str("gfx: ", gfx::error()));
@@ -105,6 +108,10 @@ fn main() {
         theme_pick: 0,
     };
     s.list_note.append("asking Mojang for the version list...");
+    if !home_ok {
+        s.stage = collection::STAGE_FAILED;
+        format(s.status, "cannot make ", home, " - check that the folder is writable");
+    }
     var drawn = 0;
     var listing = true;
 

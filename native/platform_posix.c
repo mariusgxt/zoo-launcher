@@ -26,6 +26,9 @@ int32_t zoo_local_minutes(void) {
     return (int32_t)(parts.tm_hour * 60 + parts.tm_min);
 }
 
+/* No console is opened for a program started from a file manager here. */
+void zoo_hide_console(void) {}
+
 /* X11 and Wayland hand a new window the focus themselves, so there is
    nothing to do here; see the Windows file for why it exists at all. */
 void zoo_raise_window(void) {}

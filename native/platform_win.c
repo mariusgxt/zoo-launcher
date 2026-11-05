@@ -11,6 +11,19 @@ int32_t zoo_local_minutes(void) {
     return (int32_t)(t.wHour * 60 + t.wMinute);
 }
 
+/* Hides the console that Windows opens for a double-clicked program. Goose
+   links every program as a console program, so Explorer makes a console
+   window first, gives it the focus, and the launcher's own window opens
+   behind it. The console is only ours to hide when no other process shares
+   it: started from a terminal, that terminal is the user's and stays. */
+void zoo_hide_console(void) {
+    HWND console = GetConsoleWindow();
+    DWORD attached[2];
+    if (console == NULL) { return; }
+    if (GetConsoleProcessList(attached, 2) != 1) { return; }
+    ShowWindow(console, SW_HIDE);
+}
+
 /* Brings zoo's own window to the front once it exists. A window created by a
    process that Explorer started by double-click does not get the foreground
    by itself, so the launcher appears to do nothing while it sits behind the

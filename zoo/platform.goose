@@ -7,6 +7,7 @@ namespace platform;
 extern fn zoo_platform() -> i32;
 extern fn zoo_local_minutes() -> i32;
 extern fn zoo_raise_window();
+extern fn zoo_hide_console();
 
 let WINDOWS = 0;
 let LINUX = 1;
@@ -22,6 +23,12 @@ fn clock_minutes() -> i64 { zoo_local_minutes() as i64 }
 // drawn, not before: a window with nothing in it yet can be raised and then
 // still show the desktop through it for a frame.
 fn raise_window() { zoo_raise_window(); }
+
+// Drops the console Windows opens for a double-clicked program, but only
+// when zoo opened it alone: a terminal the user started zoo from is theirs.
+// It also decides whether the window may come forward at all, since Windows
+// only lets the process that owns the foreground take it.
+fn hide_console() { zoo_hide_console(); }
 
 fn name() -> const u8[:] {
     match zoo_platform() as i64 { WINDOWS => "windows", MACOS => "macos", _ => "linux" }

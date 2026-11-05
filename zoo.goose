@@ -88,6 +88,9 @@ fn main() {
         write_stdout(text);
         return;
     }
+    // Before the window: the console Windows opened for a double-click is
+    // what holds the foreground, and the window would open behind it.
+    platform::hide_console();
     let home = platform::data_dir();
     // A data folder that cannot be made is shown in the window rather than
     // aborted on: someone who started the launcher by double-clicking it

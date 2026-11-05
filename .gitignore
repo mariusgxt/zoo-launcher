@@ -8,3 +8,5 @@
 *.png
 !docs/media/*.png
 /test/out/
+/zoo-client
+/zoo-client.exe

@@ -250,6 +250,15 @@ model("models/block/grass_block.json", {"parent": "block/block", "textures": {
 model("models/block/oak_log.json", {"parent": "block/cube_column", "textures": {
     "end": "block/oak_log_top", "side": "block/oak_log"}})
 model("models/block/oak_fence_post.json", {"parent": "block/block", "textures": {"texture": "block/oak_planks"}})
+model("blockstates/oak_leaves.json", {"variants": {"": {"model": "minecraft:block/oak_leaves"}}})
+model("models/block/leaves.json", {"parent": "block/cube_all"})
+model("models/block/oak_leaves.json", {"parent": "minecraft:block/leaves", "textures": {"all": "minecraft:block/oak_leaves"}})
+model("blockstates/water.json", {"variants": {"": {"model": "minecraft:block/water"}}})
+model("models/block/water.json", {"textures": {"particle": "block/water_still"}})
+model("blockstates/short_grass.json", {"variants": {"": {"model": "minecraft:block/short_grass"}}})
+model("models/block/cross.json", {"textures": {"particle": "#cross"}})
+model("models/block/tinted_cross.json", {"parent": "block/cross"})
+model("models/block/short_grass.json", {"parent": "minecraft:block/tinted_cross", "textures": {"cross": "minecraft:block/short_grass"}})
 
 # 16x16 textures, each a flat colour with a lighter top row so a wrong tile in
 # the atlas shows up at a glance.
@@ -263,6 +272,21 @@ for name, (r_, g_, b_) in tints.items():
             k = 40 if y == 0 else 0
             px += [min(255, r_ + k), min(255, g_ + k), min(255, b_ + k), 255]
     open(f"{res}/textures/block/{name}.png", "wb").write(png(16, 16, 6, px))
+
+# Grey textures that only look right once tinted, the way Mojang ships them:
+# leaves with holes, water as a two-frame animation strip, a tuft of grass.
+def grey_texture(name, height, alpha_at):
+    px = []
+    for y in range(height):
+        for x in range(16):
+            v = 170 + ((x * 7 + y * 3) % 5) * 12
+            px += [v, v, v, alpha_at(x, y)]
+    open(f"{res}/textures/block/{name}.png", "wb").write(png(16, height, 6, px))
+
+
+grey_texture("oak_leaves", 16, lambda x, y: 0 if (x * 5 + y * 3) % 7 == 0 else 255)
+grey_texture("water_still", 32, lambda x, y: 190)
+grey_texture("short_grass", 16, lambda x, y: 255 if (y > 5 and (x + y) % 3 != 0) else 0)
 print("resource fixture written")
 
 
@@ -273,7 +297,9 @@ print("resource fixture written")
 import math
 
 DEMO_PALETTE = ["minecraft:air", "minecraft:stone", "minecraft:dirt",
-                "minecraft:grass_block", "minecraft:oak_log"]
+                "minecraft:grass_block", "minecraft:oak_log", "minecraft:oak_leaves",
+                "minecraft:water", "minecraft:short_grass"]
+WATER_LEVEL = 7
 
 
 def demo_height(wx, wz):
@@ -289,10 +315,30 @@ def demo_section(cx, cz):
             top = demo_height(wx, wz)
             for y in range(top + 1):
                 idx[y * 256 + z * 16 + x] = 1 if y < top - 2 else (3 if y == top else 2)
-            # A trunk every so often, where the ground is flat enough for one.
-            if (wx * 7 + wz * 13) % 97 == 0 and top < 14:
-                for y in range(top + 1, min(16, top + 5)):
-                    idx[y * 256 + z * 16 + x] = 4
+            # The low ground fills with water up to one level.
+            for y in range(top + 1, WATER_LEVEL + 1):
+                idx[y * 256 + z * 16 + x] = 6
+            if top > WATER_LEVEL and (wx * 3 + wz * 5) % 11 == 0 and top < 15:
+                idx[(top + 1) * 256 + z * 16 + x] = 7
+    # Trees: a trunk where the ground is dry and a ball of leaves on top, kept
+    # inside the chunk so the writer never has to touch a neighbour.
+    for z in range(2, 14):
+        for x in range(2, 14):
+            wx, wz = cx * 16 + x, cz * 16 + z
+            top = demo_height(wx, wz)
+            if (wx * 7 + wz * 13) % 61 != 0 or top <= WATER_LEVEL or top > 10:
+                continue
+            for y in range(top + 1, top + 5):
+                idx[y * 256 + z * 16 + x] = 4
+            for dy in range(3, 7):
+                for dz in range(-2, 3):
+                    for dx in range(-2, 3):
+                        y = top + dy
+                        if y > 15 or dx * dx + dz * dz + (dy - 4) ** 2 > 6:
+                            continue
+                        i = y * 256 + (z + dz) * 16 + (x + dx)
+                        if idx[i] == 0:
+                            idx[i] = 5
     palette = nbt_list(10, [nbt_compound({"Name": (8, nbt_str(n))}) for n in DEMO_PALETTE])
     block_states = nbt_compound({"palette": (9, palette), "data": (12, packed_longs(idx, 4))})
     return nbt_compound({"Y": (1, struct.pack("b", 0)), "block_states": (10, block_states)})

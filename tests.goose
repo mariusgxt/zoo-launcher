@@ -20,6 +20,7 @@ import zoo.world.saves;
 import zoo.client.blockmodel;
 import zoo.client.atlas;
 import zoo.client.mesh;
+import zoo.client.kinds;
 
 var failures = 0;
 
@@ -315,7 +316,7 @@ fn test_mesh() {
     // The fixture is a slab eight blocks deep: its lid, its floor and four
     // walls, and nothing from inside it.
     check("only visible faces", faces == 256 + 256 + 4 * 16 * 8);
-    check("vertices per face", verts.len == faces * 6 * 6);
+    check("vertices per face", verts.len == faces * mesh::VERTS_PER_FACE * mesh::FLOATS);
     check("mesh sits in the chunk", verts[0] >= 0.0 && verts[0] <= 16.0 && verts[2] >= 0.0 && verts[2] <= 16.0);
 
     var far_pieces: mesh::Piece[>..] = [];
@@ -349,6 +350,17 @@ fn test_mesh() {
     check("outside the loaded chunks is air", mesh::cell_world(pair, both, 999, 3, 5).solid == 0);
 }
 
+fn test_kinds() {
+    check("leaves see through", kinds::see_through("minecraft:oak_leaves"));
+    check("stone hides", !kinds::see_through("minecraft:stone"));
+    let top, side = kinds::tints_of("minecraft:grass_block");
+    check("grass tinted on top only", top == kinds::TINT_GRASS && side == kinds::TINT_NONE);
+    let ct, cs = kinds::tints_of("cherry_leaves");
+    check("cherry leaves keep their colour", ct == kinds::TINT_NONE && cs == kinds::TINT_NONE);
+    let plant = blockmodel::faces_of("test/data/resources", "minecraft:short_grass");
+    check("short grass is a cross", plant.ok && plant.shape == blockmodel::CROSS && ends_with(plant.side, "block/short_grass"));
+}
+
 fn main() {
     var label: u8[>..] = [];
     specimen::format_label(label, specimen::current(), platform::name());
@@ -365,6 +377,7 @@ fn main() {
     test_blockmodel();
     test_atlas();
     test_mesh();
+    test_kinds();
     test_download();
     if failures == 0 { print("all passed"); } else { print(failures, " failed"); }
     if failures > 0 { exit(1); }

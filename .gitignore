@@ -1,0 +1,9 @@
+/zoo-launcher
+/zoo-launcher.exe
+/tests
+/tests.exe
+*.c.o
+/build/
+/dist/
+*.png
+!docs/media/*.png

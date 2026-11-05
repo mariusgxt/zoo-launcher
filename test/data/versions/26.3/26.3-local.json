@@ -1,0 +1,28 @@
+{
+  "id": "26.3",
+  "type": "release",
+  "mainClass": "net.minecraft.client.main.Main",
+  "javaVersion": {
+    "component": "java-runtime-epsilon",
+    "majorVersion": 25
+  },
+  "assetIndex": {
+    "id": "29",
+    "sha1": "0000000000000000000000000000000000000000",
+    "size": 1,
+    "totalSize": 1,
+    "url": "http://127.0.0.1:8765/29.json"
+  },
+  "downloads": {
+    "client": {
+      "sha1": "f36bd7e2cbdb5de3646c1267c6bac09033192b04",
+      "size": 6354,
+      "url": "http://127.0.0.1:8765/versions/26.3/26.3.jar"
+    }
+  },
+  "libraries": [
+    {
+      "name": "com.example:lib:1.0"
+    }
+  ]
+}

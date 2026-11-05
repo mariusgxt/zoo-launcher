@@ -19,6 +19,7 @@ import zoo.image.png;
 import zoo.world.saves;
 import zoo.client.blockmodel;
 import zoo.client.atlas;
+import zoo.client.mesh;
 
 var failures = 0;
 
@@ -274,6 +275,45 @@ fn test_atlas() {
     check("tile step", du == 0.5 && dv == 0.5);
 }
 
+fn test_mesh() {
+    let res = "test/data/resources";
+    var file: u8[>..] = [];
+    read_file("test/data/saves/testworld/region/r.0.0.mca", file);
+    var raw: u8[>..] = [];
+    region::chunk(file, 0, 0, raw);
+    var tags: nbt::Node[>..] = [];
+    nbt::read(raw, tags);
+    var layers: chunk::Layer[>..] = [];
+    var blocks: u16[>..] = [];
+    chunk::read(raw, tags, layers, blocks);
+
+    var slots: atlas::Slot[>..] = [];
+    var tiles: u8[>..] = [];
+    var known: mesh::Known[>..] = [];
+    var cells: mesh::Cell[>..] = [];
+    let vol = mesh::bake(raw, tags, layers, blocks, res, slots, tiles, known, cells);
+    check("volume spans both sections", vol.layers == 2 && vol.y0 == 0);
+    check("cells filled", cells.len == 2 * 4096);
+    check("stone cell solid", mesh::cell_at(cells, vol, 3, 7, 11).solid == 1);
+    check("air cell empty", mesh::cell_at(cells, vol, 3, 8, 11).solid == 0);
+    check("names cached once", known.len == 2);
+    check("air is not solid", mesh::air("minecraft:cave_air") && !mesh::air("minecraft:stone"));
+
+    var image: u8[>..] = [];
+    let g = atlas::flatten(tiles, image);
+    var verts: f32[>..] = [];
+    let faces = mesh::build(cells, vol, g, 0, 0, verts);
+    // The fixture is a slab eight blocks deep: its lid, its floor and four
+    // walls, and nothing from inside it.
+    check("only visible faces", faces == 256 + 256 + 4 * 16 * 8);
+    check("vertices per face", verts.len == faces * 6 * 6);
+    check("mesh sits in the chunk", verts[0] >= 0.0 && verts[0] <= 16.0 && verts[2] >= 0.0 && verts[2] <= 16.0);
+
+    var far: f32[>..] = [];
+    mesh::build(cells, vol, g, 2, -3, far);
+    check("chunk offset applied", far[0] == 32.0 && far[2] == -48.0);
+}
+
 fn main() {
     var label: u8[>..] = [];
     specimen::format_label(label, specimen::current(), platform::name());
@@ -289,6 +329,7 @@ fn main() {
     test_saves();
     test_blockmodel();
     test_atlas();
+    test_mesh();
     test_download();
     if failures == 0 { print("all passed"); } else { print(failures, " failed"); }
     if failures > 0 { exit(1); }

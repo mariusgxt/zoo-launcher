@@ -155,3 +155,62 @@ open(f"{world}/level.dat", "wb").write(gzip.compress(level))
 open(f"{world}/region/r.0.0.mca", "wb").write(region({(0, 0): chunk_nbt(0, 0), (1, 0): chunk_nbt(1, 0)}))
 open(f"{world}/region/r.-1.-1.mca", "wb").write(region({(-1, -1): chunk_nbt(-1, -1)}))
 print("world fixture written")
+
+
+# --- PNGs for the texture decoder ------------------------------------------
+# Written by hand rather than with Pillow: the fixtures must stay reproducible
+# and the repository free of another build dependency.
+def png(width, height, colour, pixels, palette=None, trns=None, filters=None):
+    def chunk(kind, body):
+        c = kind + body
+        return struct.pack(">I", len(body)) + c + struct.pack(">I", zlib.crc32(c) & 0xFFFFFFFF)
+
+    stride = {0: 1, 2: 3, 3: 1, 4: 2, 6: 4}[colour] * width
+    rows = b""
+    for y in range(height):
+        row = bytes(pixels[y * stride:(y + 1) * stride])
+        f = (filters or [0] * height)[y]
+        if f == 0:
+            rows += b"\x00" + row
+        elif f == 1:                       # Sub
+            step = stride // width
+            out = bytearray(row)
+            for i in range(stride - 1, step - 1, -1):
+                out[i] = (out[i] - out[i - step]) & 0xFF
+            rows += b"\x01" + bytes(out)
+        elif f == 2:                       # Up
+            prev = bytes(pixels[(y - 1) * stride:y * stride]) if y else b"\x00" * stride
+            rows += b"\x02" + bytes((row[i] - prev[i]) & 0xFF for i in range(stride))
+        else:
+            raise SystemExit("filter not written")
+    out = b"\x89PNG\r\n\x1a\n"
+    out += chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, colour, 0, 0, 0))
+    if palette:
+        out += chunk(b"PLTE", bytes(palette))
+    if trns:
+        out += chunk(b"tRNS", bytes(trns))
+    out += chunk(b"IDAT", zlib.compress(rows, 9))
+    out += chunk(b"IEND", b"")
+    return out
+
+
+pdir = f"{root}/png"
+os.makedirs(pdir, exist_ok=True)
+
+# 4x2 truecolour, second row filtered with Up so unfiltering is exercised.
+rgb = []
+for y in range(2):
+    for x in range(4):
+        rgb += [x * 60 + y, 128 - x * 10, 20 + y * 100]
+open(f"{pdir}/rgb.png", "wb").write(png(4, 2, 2, rgb, filters=[0, 2]))
+
+rgba = []
+for y in range(2):
+    for x in range(2):
+        rgba += [x * 100, y * 100, 50, 255 - x * 60]
+open(f"{pdir}/rgba.png", "wb").write(png(2, 2, 6, rgba, filters=[0, 1]))
+
+open(f"{pdir}/grey.png", "wb").write(png(3, 1, 0, [0, 127, 255]))
+open(f"{pdir}/indexed.png", "wb").write(
+    png(3, 1, 3, [0, 1, 2], palette=[255, 0, 0, 0, 255, 0, 0, 0, 255], trns=[0, 128]))
+print("png fixtures written")

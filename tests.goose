@@ -15,6 +15,7 @@ import zoo.archive.compress;
 import zoo.world.nbt;
 import zoo.world.region;
 import zoo.world.chunk;
+import zoo.image.png;
 
 var failures = 0;
 
@@ -163,6 +164,48 @@ fn test_chunk() {
     check("layer by height", chunk::layer_of(layers, 5) == 0 && chunk::layer_of(layers, 20) == 1 && chunk::layer_of(layers, 200) == -1);
 }
 
+fn png_of(path: const u8[:], out: u8[>..]&) -> png::Image {
+    var file: u8[>..] = [];
+    if !read_file(path, file) { return png::Image { width: 0, height: 0, ok: false, error: [] }; }
+    png::decode(file, out)
+}
+
+fn test_png() {
+    var rgb: u8[>..] = [];
+    let a = png_of("test/data/png/rgb.png", rgb);
+    check("rgb decodes", a.ok && a.width == 4 && a.height == 2 && rgb.len == 4 * 2 * 4);
+    check("rgb first pixel", rgb[0] == 0 && rgb[1] == 128 && rgb[2] == 20 && rgb[3] == 255);
+    // Row one is stored with the Up filter, so these bytes only come out right
+    // if unfiltering ran.
+    check("rgb second row", rgb[16] == 1 && rgb[17] == 128 && rgb[18] == 120);
+    check("rgb last pixel", rgb[28] == 181 && rgb[29] == 98 && rgb[30] == 120);
+
+    var rgba: u8[>..] = [];
+    let b = png_of("test/data/png/rgba.png", rgba);
+    check("rgba decodes", b.ok && rgba.len == 2 * 2 * 4);
+    check("rgba alpha kept", rgba[3] == 255 && rgba[7] == 195);
+
+    var grey: u8[>..] = [];
+    let c = png_of("test/data/png/grey.png", grey);
+    check("grey decodes", c.ok && grey.len == 12);
+    check("grey spreads to rgb", grey[4] == 127 && grey[5] == 127 && grey[6] == 127 && grey[7] == 255);
+
+    var idx: u8[>..] = [];
+    let e = png_of("test/data/png/indexed.png", idx);
+    check("indexed decodes", e.ok && idx.len == 12);
+    check("palette applied", idx[0] == 255 && idx[1] == 0 && idx[2] == 0);
+    check("tRNS applied", idx[3] == 0 && idx[7] == 128 && idx[11] == 255);
+
+    var junk: u8[>..] = [];
+    let f = png::decode("not a png at all", junk);
+    check("junk refused", !f.ok && f.error.len > 0 && junk.len == 0);
+    var file: u8[>..] = [];
+    read_file("test/data/png/rgb.png", file);
+    var half: u8[>..] = [];
+    check("truncated png refused", !png::decode(file[..file.len / 2], half).ok);
+    check("paeth picks the nearest", png::paeth(10, 20, 15) == 15 && png::paeth(2, 3, 100) == 2);
+}
+
 fn main() {
     var label: u8[>..] = [];
     specimen::format_label(label, specimen::current(), platform::name());
@@ -174,6 +217,7 @@ fn main() {
     test_nbt();
     test_region();
     test_chunk();
+    test_png();
     test_download();
     if failures == 0 { print("all passed"); } else { print(failures, " failed"); }
     if failures > 0 { exit(1); }

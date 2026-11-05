@@ -121,9 +121,7 @@ fn load_world(save: const saves::Save&, resources: const u8[:], cx0: i64, cz0: i
     var out = Loaded { chunks: 0, faces: 0, floats: 0, top: -2048 };
     var known: mesh::Known[>..] = [];
     var pending: mesh::Cell[>..] = [];
-    var volumes: mesh::Volume[>..] = [];
-    var at_x: i64[>..] = [];
-    var at_z: i64[>..] = [];
+    var pieces: mesh::Piece[>..] = [];
     // Meshing needs the atlas grid, which is only final once every chunk has
     // been baked, so the cells are kept and the faces written in a second pass.
     var file: u8[>..] = [];
@@ -151,9 +149,7 @@ fn load_world(save: const saves::Save&, resources: const u8[:], cx0: i64, cz0: i
             if !info.ok { continue; }
             let vol = mesh::bake(raw, tags, layers, blocks, resources, slots, tiles, known, pending);
             if vol.layers == 0 { continue; }
-            volumes.push(vol);
-            at_x.push(cx);
-            at_z.push(cz);
+            pieces.push(mesh::Piece { cx: cx, cz: cz, vol: vol });
             out.chunks++;
             out.top = max(out.top, (vol.y0 + vol.layers) * chunk::EDGE);
         }
@@ -161,8 +157,8 @@ fn load_world(save: const saves::Save&, resources: const u8[:], cx0: i64, cz0: i
     guard out.chunks > 0 else { return out; }
     var image: u8[>..] = [];
     let grid = atlas::flatten(tiles, image);
-    for i in volumes.len {
-        out.faces += mesh::build(pending, volumes[i], grid, at_x[i], at_z[i], verts);
+    for i in pieces.len {
+        out.faces += mesh::build(pending, pieces, i, grid, verts);
     }
     out.floats = verts.len;
     out

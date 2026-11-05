@@ -103,9 +103,31 @@ fn bake(d: const u8[:], nodes: const nbt::Node[:], layers: const chunk::Layer[:]
     vol
 }
 
+// One loaded chunk: where it sits and which slice of the cell array is its.
+struct Piece { cx: i64, cz: i64, vol: Volume }
+
+fn empty_cell() -> Cell { Cell { solid: 0, top: 0, side: 0, bottom: 0 } }
+
+fn piece_of(pieces: const Piece[:], cx: i64, cz: i64) -> i64 {
+    for p, i in pieces {
+        if p.cx == cx && p.cz == cz { return i; }
+    }
+    -1
+}
+
+// A cell by world coordinates, across chunk borders. Anything outside the
+// loaded chunks counts as air, which is why the edge of what is loaded still
+// shows its faces: zoo would have to read the neighbour to know better.
+fn cell_world(cells: const Cell[:], pieces: const Piece[:], wx: i64, wy: i64, wz: i64) -> Cell {
+    let i = piece_of(pieces, div_euclid(wx, EDGE), div_euclid(wz, EDGE));
+    guard i >= 0 else { return empty_cell(); }
+    let vol = pieces[i].vol;
+    cell_at(cells, vol, wx % EDGE, wy - vol.y0 * EDGE, wz % EDGE)
+}
+
 fn cell_at(cells: const Cell[:], vol: const Volume&, x: i64, y: i64, z: i64) -> Cell {
     guard x >= 0 && x < EDGE && z >= 0 && z < EDGE && y >= 0 && y < vol.layers * EDGE else {
-        return Cell { solid: 0, top: 0, side: 0, bottom: 0 };
+        return empty_cell();
     }
     cells[vol.cells + y * EDGE * EDGE + z * EDGE + x]
 }
@@ -147,49 +169,59 @@ fn face(out: f32[>..]&, g: const atlas::Grid&, tile: i64, shade: f32,
     vertex(out, ox + bx, oy + by, oz + bz, us, vs, shade);
 }
 
-// Appends the visible faces of a baked chunk, positioned in world blocks, and
-// returns how many faces were written.
-fn build(cells: const Cell[:], vol: const Volume&, g: const atlas::Grid&,
-         cx: i64, cz: i64, out: f32[>..]&) -> i64 {
+// Appends the visible faces of one loaded chunk, positioned in world blocks,
+// and returns how many faces were written. A face is kept when the cell next to
+// it is air; at a chunk's four walls that neighbour lives in another chunk, so
+// the test goes through the whole set of loaded pieces there.
+fn build(cells: const Cell[:], pieces: const Piece[:], me: i64, g: const atlas::Grid&, out: f32[>..]&) -> i64 {
+    guard me >= 0 && me < pieces.len else { return 0; }
+    let cx = pieces[me].cx;
+    let cz = pieces[me].cz;
+    let vol = pieces[me].vol;
     var faces = 0;
-    let wx0 = (cx * EDGE) as f32;
-    let wz0 = (cz * EDGE) as f32;
-    let wy0 = (vol.y0 * EDGE) as f32;
+    let wx0 = cx * EDGE;
+    let wz0 = cz * EDGE;
+    let wy0 = vol.y0 * EDGE;
     for y in vol.layers * EDGE {
         for z in EDGE {
             for x in EDGE {
-                let me = cell_at(cells, vol, x, y, z);
-                if me.solid == 0 { continue; }
-                let fx = wx0 + x as f32;
-                let fy = wy0 + y as f32;
-                let fz = wz0 + z as f32;
+                let here = cell_at(cells, vol, x, y, z);
+                if here.solid == 0 { continue; }
+                let wx = wx0 + x;
+                let wy = wy0 + y;
+                let wz = wz0 + z;
+                let fx = wx as f32;
+                let fy = wy as f32;
+                let fz = wz as f32;
+                // Up and down stay inside this chunk: above and below the
+                // baked column there is nothing but air anyway.
                 if cell_at(cells, vol, x, y + 1, z).solid == 0 {
-                    face(out, g, me.top as i64, shade_of(0, 1, 0),
+                    face(out, g, here.top, shade_of(0, 1, 0),
                          fx, fy + 1.0, fz + 1.0, 1.0, 0.0, 0.0, 0.0, 0.0, -1.0);
                     faces++;
                 }
                 if cell_at(cells, vol, x, y - 1, z).solid == 0 {
-                    face(out, g, me.bottom as i64, shade_of(0, -1, 0),
+                    face(out, g, here.bottom, shade_of(0, -1, 0),
                          fx, fy, fz, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0);
                     faces++;
                 }
-                if cell_at(cells, vol, x, y, z + 1).solid == 0 {
-                    face(out, g, me.side as i64, shade_of(0, 0, 1),
+                if side_open(cells, pieces, vol, x, y, z + 1, wx, wy, wz + 1) {
+                    face(out, g, here.side, shade_of(0, 0, 1),
                          fx, fy, fz + 1.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0);
                     faces++;
                 }
-                if cell_at(cells, vol, x, y, z - 1).solid == 0 {
-                    face(out, g, me.side as i64, shade_of(0, 0, -1),
+                if side_open(cells, pieces, vol, x, y, z - 1, wx, wy, wz - 1) {
+                    face(out, g, here.side, shade_of(0, 0, -1),
                          fx + 1.0, fy, fz, -1.0, 0.0, 0.0, 0.0, 1.0, 0.0);
                     faces++;
                 }
-                if cell_at(cells, vol, x + 1, y, z).solid == 0 {
-                    face(out, g, me.side as i64, shade_of(1, 0, 0),
+                if side_open(cells, pieces, vol, x + 1, y, z, wx + 1, wy, wz) {
+                    face(out, g, here.side, shade_of(1, 0, 0),
                          fx + 1.0, fy, fz + 1.0, 0.0, 0.0, -1.0, 0.0, 1.0, 0.0);
                     faces++;
                 }
-                if cell_at(cells, vol, x - 1, y, z).solid == 0 {
-                    face(out, g, me.side as i64, shade_of(-1, 0, 0),
+                if side_open(cells, pieces, vol, x - 1, y, z, wx - 1, wy, wz) {
+                    face(out, g, here.side, shade_of(-1, 0, 0),
                          fx, fy, fz, 0.0, 0.0, 1.0, 0.0, 1.0, 0.0);
                     faces++;
                 }
@@ -197,4 +229,14 @@ fn build(cells: const Cell[:], vol: const Volume&, g: const atlas::Grid&,
         }
     }
     faces
+}
+
+// Whether a sideways neighbour is air. Inside the chunk that is one array read;
+// only the cells against a wall pay for the chunk lookup.
+fn side_open(cells: const Cell[:], pieces: const Piece[:], vol: const Volume&,
+             x: i64, y: i64, z: i64, wx: i64, wy: i64, wz: i64) -> bool {
+    if x >= 0 && x < EDGE && z >= 0 && z < EDGE {
+        return cell_at(cells, vol, x, y, z).solid == 0;
+    }
+    cell_world(cells, pieces, wx, wy, wz).solid == 0
 }

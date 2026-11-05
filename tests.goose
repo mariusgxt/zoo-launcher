@@ -302,17 +302,45 @@ fn test_mesh() {
 
     var image: u8[>..] = [];
     let g = atlas::flatten(tiles, image);
+    var pieces: mesh::Piece[>..] = [];
+    pieces.push(mesh::Piece { cx: 0, cz: 0, vol: vol });
     var verts: f32[>..] = [];
-    let faces = mesh::build(cells, vol, g, 0, 0, verts);
+    let faces = mesh::build(cells, pieces, 0, g, verts);
     // The fixture is a slab eight blocks deep: its lid, its floor and four
     // walls, and nothing from inside it.
     check("only visible faces", faces == 256 + 256 + 4 * 16 * 8);
     check("vertices per face", verts.len == faces * 6 * 6);
     check("mesh sits in the chunk", verts[0] >= 0.0 && verts[0] <= 16.0 && verts[2] >= 0.0 && verts[2] <= 16.0);
 
+    var far_pieces: mesh::Piece[>..] = [];
+    far_pieces.push(mesh::Piece { cx: 2, cz: -3, vol: vol });
     var far: f32[>..] = [];
-    mesh::build(cells, vol, g, 2, -3, far);
+    mesh::build(cells, far_pieces, 0, g, far);
     check("chunk offset applied", far[0] == 32.0 && far[2] == -48.0);
+
+    // With the chunk beside it loaded, the wall between the two is dropped:
+    // one side of each chunk loses its 16 by 8 faces.
+    var pair: mesh::Cell[>..] = [];
+    var both: mesh::Piece[>..] = [];
+    var tags_b: nbt::Node[>..] = [];
+    var raw_b: u8[>..] = [];
+    region::chunk(file, 1, 0, raw_b);
+    nbt::read(raw_b, tags_b);
+    var layers_b: chunk::Layer[>..] = [];
+    var blocks_b: u16[>..] = [];
+    chunk::read(raw_b, tags_b, layers_b, blocks_b);
+    var known_b: mesh::Known[>..] = [];
+    var slots_b: atlas::Slot[>..] = [];
+    var tiles_b: u8[>..] = [];
+    both.push(mesh::Piece { cx: 0, cz: 0, vol: mesh::bake(raw, tags, layers, blocks, res, slots_b, tiles_b, known_b, pair) });
+    both.push(mesh::Piece { cx: 1, cz: 0, vol: mesh::bake(raw_b, tags_b, layers_b, blocks_b, res, slots_b, tiles_b, known_b, pair) });
+    var image_b: u8[>..] = [];
+    let g_b = atlas::flatten(tiles_b, image_b);
+    var seam: f32[>..] = [];
+    let seam_faces = mesh::build(pair, both, 0, g_b, seam);
+    check("shared wall dropped", seam_faces == faces - 16 * 8);
+    check("neighbour cell seen", mesh::cell_world(pair, both, 16, 3, 5).solid == 1);
+    check("outside the loaded chunks is air", mesh::cell_world(pair, both, 999, 3, 5).solid == 0);
 }
 
 fn main() {

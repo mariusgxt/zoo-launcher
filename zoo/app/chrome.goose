@@ -15,20 +15,26 @@ let SKYLINE: i64[40] = [3, 5, 4, 8, 6, 6, 11, 9, 4, 7, 13, 10, 6, 5, 9, 12, 8, 4
                         7, 5, 3, 4, 9, 11, 6, 8, 5, 12, 7, 4, 10, 6, 9, 3, 7, 11, 5, 8];
 let BLOCK: f32 = 16.0;
 
-// The ground: a dark field, a lit corner where the design has its glow, and
-// a blocky skyline along the bottom that stands in for the screenshot the
-// concept blurs behind its pages.
+// The ground: a dark field and a lit corner where the concept has its glow.
 fn draw_ground(p: const kit::Pen&, w: f32, h: f32) {
     ui::fill_rect(p.ctx, kit::r(0.0, 0.0, w, h), 0.0, theme::BG);
     kit::glow(p, kit::r(w * 0.25, 0.0, w * 0.75, h * 0.8), theme::GLOW);
-    let base = h * 0.78;
-    let cols = (w / BLOCK) as i64 + 1;
+}
+
+// The skyline that stands in for the screenshot the concept blurs behind
+// its play page. Only that page draws it: on a page covered by a panel it
+// would show as slivers in the gutters, which read as a drawing fault.
+fn draw_skyline(p: const kit::Pen&, box: ui::Rect, w: f32, h: f32) {
+    ui::push_scissor(p.ctx, box);
+    let base = box.y + box.h;
+    let cols = (box.w / BLOCK) as i64 + 1;
     var i = 0;
     while i < cols {
-        let bh = SKYLINE[i % SKYLINE.len] * BLOCK;
-        ui::fill_rect(p.ctx, kit::r(i * BLOCK, base - bh, BLOCK, h - base + bh), 0.0, theme::SKYLINE);
+        let bh = min(SKYLINE[i % SKYLINE.len] * BLOCK, box.h);
+        ui::fill_rect(p.ctx, kit::r(box.x + i * BLOCK, base - bh, BLOCK, bh), 0.0, theme::SKYLINE);
         i++;
     }
+    ui::push_scissor(p.ctx, kit::r(0.0, 0.0, w, h));
 }
 
 // Which pages the rail offers, top to bottom. Quit sits apart at the foot,

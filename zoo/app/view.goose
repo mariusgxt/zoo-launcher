@@ -24,7 +24,11 @@ fn draw(ctx: ui::Context, fonts: const theme::Fonts&, s: state::State&,
     if ui::begin(ctx, "zoo", ui::rect(0.0, 0.0, w, h), ui::WINDOW_NO_SCROLLBAR) {
         let p = kit::Pen { ctx: ctx, fonts: fonts };
         chrome::draw_ground(p, w, h);
-        if s.page == state::PAGE_PLAY { want = play::draw(p, s, w, h); }
+        // Only Play has no panel over the ground, so only Play can show it.
+        if s.page == state::PAGE_PLAY {
+            chrome::draw_skyline(p, kit::r(0.0, state::TOP_H, w, h - state::TOP_H), w, h);
+            want = play::draw(p, s, w, h);
+        }
         else if s.page == state::PAGE_VERSIONS { versions::draw(p, s, w, h); }
         else if s.page == state::PAGE_CONTENT { shelf::draw(p, s, items, w, h); }
         else if s.page == state::PAGE_WORLDS { worlds::draw(p, s, found, w, h); }

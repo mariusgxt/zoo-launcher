@@ -5,6 +5,12 @@ on:
     branches: ["**"]
     tags: ["v*"]
   pull_request:
+  # A release can also be cut by hand; it tags the commit it runs on.
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Tag to release, e.g. v0.1.0"
+        required: true
 
 permissions:
   contents: write
@@ -80,7 +86,7 @@ jobs:
           path: zoo-${{ matrix.name }}.*
 
   release:
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
     needs: build
     runs-on: ubuntu-24.04
     steps:
@@ -91,7 +97,8 @@ jobs:
           merge-multiple: true
       - name: Release notes from the specimen label
         run: |
-          tag="${GITHUB_REF_NAME#v}"
+          ref="${{ github.event.inputs.release_tag || github.ref_name }}"
+          tag="${ref#v}"
           {
             echo "## zoo ${tag}"
             echo
@@ -104,3 +111,6 @@ jobs:
         with:
           files: dist/*
           body_path: notes.md
+          tag_name: ${{ github.event.inputs.release_tag || github.ref_name }}
+          target_commitish: ${{ github.sha }}
+          name: ${{ github.event.inputs.release_tag || github.ref_name }}
